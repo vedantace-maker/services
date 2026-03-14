@@ -1,50 +1,44 @@
-# Welcome to your Expo app 👋
+# 🏍️ BikeService App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A cross-platform mobile application built with React Native and Expo Router. This app connects bike owners (customers) with garage owners, allowing customers to find nearby garages and book service slots, while enabling garage owners to manage their bookings and schedules.
 
-## Get started
+## ✨ Features
+* **Role-Based Authentication:** Distinct flows for Customers and Garage Owners.
+* **Customer App:** View available garages, calculate distance, check garage details, and book service slots.
+* **Garage Owner App:** Manage the garage schedule, view incoming bookings, and update service status.
+* **Mock Backend Integration:** Dummy authentication and local storage for rapid prototyping.
 
-1. Install dependencies
+## 🗂️ Folder Structure Explained
 
-   ```bash
-   npm install
-   ```
+The project uses **Expo Router** for file-based routing. Here is a breakdown of the directory structure:
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```text
+BikeService/
+├── app/                    # 📱 Main application routes (Expo Router)
+│   ├── _layout.tsx         # Root layout (handles global providers & initial routing)
+│   ├── (auth)/             # 🔒 Authentication Route Group
+│   │   ├── _layout.tsx     # Auth layout
+│   │   ├── login.tsx       # User & Owner login screen
+│   │   └── register.tsx    # New account registration screen
+│   ├── (customer)/         # 🧑 Customer Route Group
+│   │   ├── _layout.tsx     # Customer navigation/tab layout
+│   │   ├── index.tsx       # Customer Home: Lists nearby garages
+│   │   ├── garage-detail.tsx # Detailed view of a selected garage
+│   │   ├── book-slot.tsx   # Interface to pick a date/time for service
+│   │   └── my-bookings.tsx # List of the customer's past & upcoming bookings
+│   └── (owner)/            # 🛠️ Garage Owner Route Group
+│       ├── _layout.tsx     # Owner navigation/tab layout
+│       ├── index.tsx       # Owner Home: Dashboard summary
+│       ├── schedule.tsx    # Manage working hours and available slots
+│       └── bookings.tsx    # List of all customer bookings for the garage
+├── components/             # 🧩 Reusable UI Components
+│   └── GarageCard.tsx      # Card component to display a garage's summary (image, name, distance)
+├── store/                  # 💾 State Management
+│   └── authStore.ts        # Global state for authentication (e.g., Zustand/Redux for user role & session)
+├── types/                  # 🏷️ TypeScript Definitions
+│   └── index.ts            # Global interfaces (User, Garage, Booking, etc.)
+└── utils/                  # 🛠️ Helper Functions & Utilities
+    ├── dummyAuth.ts        # Mock API calls for login/registration testing
+    ├── storage.ts          # Wrappers for local storage (AsyncStorage/SecureStore)
+    ├── distance.ts         # Math logic to calculate distances between user and garages
+    └── helpers.ts          # Generic utility functions (date formatting, text capitalization)
