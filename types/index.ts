@@ -16,29 +16,37 @@ export interface TimeSlot {
     bookedByName?: string;
 }
 
-export interface DaySchedule {
-    date: string;
-    slots: TimeSlot[];
-    isOpen: boolean;
-}
-
 export interface GarageServices {
     bike: string[];
     scooty: string[];
 }
 
-export interface Garage {
+// export interface Garage {
+//     id: string;
+//     ownerUid: string;
+//     name: string;
+//     address: string;
+//     phone: string;
+//     latitude: number;
+//     longitude: number;
+//     services: GarageServices;
+//     schedule: DaySchedule[];
+//     distanceKm?: number;
+// }
+export type Garage = {
     id: string;
-    ownerUid: string;
     name: string;
     address: string;
     phone: string;
-    latitude: number;
-    longitude: number;
-    services: GarageServices;
-    schedule: DaySchedule[];
+    latitude?: number;
+    longitude?: number;
     distanceKm?: number;
-}
+    services?: {
+        bike?: string[];
+        scooty?: string[];
+    };
+    schedule?: DaySchedule[];   // ← comes nested from Django
+};
 
 // ─── Booking status flow ───────────────────────────────────────────────────
 // pending → accepted → in_progress → completed
@@ -67,3 +75,27 @@ export interface Booking {
     completedAt?: number;
     rejectionNote?: string;
 }
+
+// export interface DaySchedule {
+//     day: string;
+//     date?: string;       // used when schedule is per-date (customer booking)
+//     isOpen: boolean;
+//     slots: TimeSlot[];
+
+//     // ← Add these three fields
+//     startHour?: number;       // 0–23, e.g. 9 = 09:00
+//     endHour?: number;       // 0–23, e.g. 18 = 18:00
+//     intervalMinutes?: number;       // 30 | 60 | 120
+// }
+
+export type Weekday =
+    | 'Monday' | 'Tuesday' | 'Wednesday'
+    | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
+
+export type DaySchedule = {
+    day: Weekday;
+    isOpen: boolean;
+    startHour: number;   // 0–23
+    endHour: number;   // 0–23
+    intervalMinutes: number;   // 30 | 60 | 90 | 120
+};

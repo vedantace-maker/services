@@ -1,25 +1,90 @@
 import { Tabs } from 'expo-router';
-import { Text } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { Colors, Typography } from '../../constants/theme';
+
+type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
+
+function TabIcon({ name, focused }: { name: IoniconsName; focused: boolean }) {
+    return (
+        <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
+            <Ionicons
+                name={name}
+                size={20}
+                color={focused ? Colors.primary : Colors.textTertiary}
+            />
+        </View>
+    );
+}
 
 export default function OwnerLayout() {
+    const insets = useSafeAreaInsets();
+
     return (
-        <Tabs screenOptions={{ tabBarActiveTintColor: '#FF6B35' }}>
+        <Tabs
+            screenOptions={{
+                headerShown: false,
+                tabBarStyle: [
+                    styles.tabBar,
+                    { height: 56 + insets.bottom + 8, paddingBottom: insets.bottom + 10 },
+                ],
+                tabBarLabelStyle: styles.tabLabel,
+                tabBarActiveTintColor: Colors.primary,
+                tabBarInactiveTintColor: Colors.textTertiary,
+            }}
+        >
             <Tabs.Screen
                 name="index"
-                options={{ title: 'Dashboard', tabBarIcon: () => <Text>🏪</Text> }}
-            />
-            <Tabs.Screen
-                name="schedule"
-                options={{ title: 'Schedule', tabBarIcon: () => <Text>🗓️</Text> }}
+                options={{
+                    title: 'Dashboard',
+                    tabBarIcon: ({ focused }) => (
+                        <TabIcon name={focused ? 'grid' : 'grid-outline'} focused={focused} />
+                    ),
+                }}
             />
             <Tabs.Screen
                 name="bookings"
-                options={{ title: 'Bookings', tabBarIcon: () => <Text>📋</Text> }}
+                options={{
+                    title: 'Bookings',
+                    tabBarIcon: ({ focused }) => (
+                        <TabIcon name={focused ? 'calendar' : 'calendar-outline'} focused={focused} />
+                    ),
+                }}
+            />
+            <Tabs.Screen
+                name="schedule"
+                options={{
+                    title: 'Schedule',
+                    tabBarIcon: ({ focused }) => (
+                        <TabIcon name={focused ? 'time' : 'time-outline'} focused={focused} />
+                    ),
+                }}
             />
             <Tabs.Screen
                 name="account"
-                options={{ title: 'Account', tabBarIcon: () => <Text>👤</Text> }}
+                options={{
+                    title: 'Account',
+                    tabBarIcon: ({ focused }) => (
+                        <TabIcon name={focused ? 'person' : 'person-outline'} focused={focused} />
+                    ),
+                }}
             />
         </Tabs>
     );
 }
+
+const styles = StyleSheet.create({
+    tabBar: {
+        backgroundColor: Colors.surface,
+        borderTopColor: Colors.border,
+        borderTopWidth: 1,
+        paddingTop: 8,
+    },
+    tabLabel: { ...Typography.tab, marginTop: 2 },
+    iconWrap: {
+        width: 36, height: 28,
+        alignItems: 'center', justifyContent: 'center', borderRadius: 8,
+    },
+    iconWrapActive: { backgroundColor: Colors.primaryLight },
+});

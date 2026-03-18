@@ -1,59 +1,89 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Garage } from '../types';
+import { Colors, Typography, Spacing, Radius, Shadow } from '../constants/theme';
 
 interface Props { garage: Garage; onPress: () => void; }
 
 export default function GarageCard({ garage, onPress }: Props) {
     const bikeCount = garage.services?.bike?.length ?? 0;
     const scootyCount = garage.services?.scooty?.length ?? 0;
+    const totalServices = bikeCount + scootyCount;
 
     return (
         <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.85}>
-            <View style={styles.row}>
-                <Text style={styles.name}>{garage.name}</Text>
-                {garage.distanceKm !== undefined && (
+
+            {/* Top row */}
+            <View style={styles.topRow}>
+                <View style={styles.iconBox}>
+                    <Ionicons name="storefront-outline" size={22} color={Colors.primary} />
+                </View>
+                <View style={styles.info}>
+                    <Text style={styles.name} numberOfLines={1}>{garage.name}</Text>
+                    <View style={styles.addressRow}>
+                        <Ionicons name="location-outline" size={13} color={Colors.textTertiary} />
+                        <Text style={styles.address} numberOfLines={1}>{garage.address}</Text>
+                    </View>
+                </View>
+                {garage.distanceKm !== undefined ? (
                     <View style={styles.distBadge}>
                         <Text style={styles.distText}>{garage.distanceKm} km</Text>
                     </View>
-                )}
+                ) : null}
             </View>
 
-            <Text style={styles.address}>📍 {garage.address}</Text>
+            {/* Divider */}
+            <View style={styles.divider} />
 
-            <View style={styles.categoryRow}>
-                {bikeCount > 0 && (
-                    <View style={styles.catBadge}>
-                        <Text style={styles.catBikeText}>🏍️ {bikeCount} Bike</Text>
-                    </View>
-                )}
-                {scootyCount > 0 && (
-                    <View style={[styles.catBadge, styles.catScootyBadge]}>
-                        <Text style={styles.catScootyText}>🛵 {scootyCount} Scooty</Text>
-                    </View>
-                )}
+            {/* Bottom row */}
+            <View style={styles.bottomRow}>
+                <View style={styles.serviceBadge}>
+                    <Ionicons name="bicycle-outline" size={13} color={Colors.info} />
+                    <Text style={styles.serviceBadgeText}>{bikeCount} bike</Text>
+                </View>
+                <View style={[styles.serviceBadge, { backgroundColor: '#F5F3FF' }]}>
+                    <Ionicons name="speedometer-outline" size={13} color="#6D28D9" />
+                    <Text style={[styles.serviceBadgeText, { color: '#6D28D9' }]}>{scootyCount} scooty</Text>
+                </View>
+                <View style={styles.flex1} />
+                <View style={styles.phoneRow}>
+                    <Ionicons name="call-outline" size={13} color={Colors.textTertiary} />
+                    <Text style={styles.phone}>{garage.phone}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
             </View>
+
         </TouchableOpacity>
     );
 }
 
 const styles = StyleSheet.create({
     card: {
-        backgroundColor: '#fff', borderRadius: 14, padding: 16,
-        marginBottom: 12, elevation: 3,
-        shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6
+        backgroundColor: Colors.surface, borderRadius: Radius.lg,
+        marginBottom: Spacing.sm, borderWidth: 1, borderColor: Colors.border,
+        ...Shadow.sm,
     },
-    row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    name: { fontSize: 17, fontWeight: 'bold', color: '#222', flex: 1 },
-    distBadge: { backgroundColor: '#FFF3EF', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-    distText: { color: '#FF6B35', fontWeight: '600', fontSize: 13 },
-    address: { color: '#666', marginTop: 6, fontSize: 13 },
-    categoryRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
-    catBadge: {
-        backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE',
-        paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20
+    topRow: { flexDirection: 'row', alignItems: 'center', padding: Spacing.md, gap: Spacing.sm },
+    iconBox: {
+        width: 44, height: 44, borderRadius: Radius.md,
+        backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center',
     },
-    catBikeText: { color: '#2563EB', fontSize: 12, fontWeight: '600' },
-    catScootyBadge: { backgroundColor: '#F5F3FF', borderColor: '#DDD6FE' },
-    catScootyText: { color: '#7C3AED', fontSize: 12, fontWeight: '600' },
+    info: { flex: 1 },
+    name: { ...Typography.h3, color: Colors.textPrimary },
+    addressRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 },
+    address: { ...Typography.caption, color: Colors.textTertiary, flex: 1 },
+    distBadge: { backgroundColor: Colors.primaryLight, paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: Radius.full },
+    distText: { ...Typography.caption, color: Colors.primary, fontWeight: '600' },
+    divider: { height: 1, backgroundColor: Colors.borderLight, marginHorizontal: Spacing.md },
+    bottomRow: { flexDirection: 'row', alignItems: 'center', padding: Spacing.md, gap: Spacing.sm },
+    serviceBadge: {
+        flexDirection: 'row', alignItems: 'center', gap: 4,
+        backgroundColor: Colors.infoLight, paddingHorizontal: Spacing.sm,
+        paddingVertical: 4, borderRadius: Radius.full,
+    },
+    serviceBadgeText: { ...Typography.caption, color: Colors.info, fontWeight: '600' },
+    flex1: { flex: 1 },
+    phoneRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    phone: { ...Typography.caption, color: Colors.textTertiary },
 });

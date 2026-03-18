@@ -1,45 +1,117 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
+import api from './api';
 import { AppUser } from '../types';
 
-const USERS_KEY = '@bikeservice_users';
-const CURRENT_USER_KEY = '@bikeservice_current_user';
+// ─── Keys ─────────────────────────────────────────────────────────────────────
+const ACCESS_KEY = 'access_token';
+const REFRESH_KEY = 'refresh_token';
+const USER_KEY = 'current_user';
 
-export async function getAllUsers(): Promise<(AppUser & { password: string })[]> {
-    const raw = await AsyncStorage.getItem(USERS_KEY);
-    return raw ? JSON.parse(raw) : [];
+// ─── Register ─────────────────────────────────────────────────────────────────
+export async function registerUser(userData: {
+    name: string;
+    email: string;
+    phone: string;
+    password: string;
+    role: 'customer' | 'owner';
+    garageName?: string;
+    address?: string;
+    latitude?: number;
+    longitude?: number;
+}): Promise<{ success: boolean; user?: AppUser; message: string }> {
+    try {
+        const { data } = await api.post('/auth/register/', {
+            name: userData.name,
+            email: userData.email,
+            phone: userData.phone,
+            password: userData.password,
+            role: userData.role,
+            garage_name: userData.garageName,
+            address: userData.address,
+            latitude: userData.latitude,
+            longitude: userData.longitude,
+        });
+
+        // Save tokens
+        await SecureStore.setItemAsync(ACCESS_KEY, data.access);
+        await SecureStore.setItemAsync(REFRESH_KEY, data.refresh);
+
+        // Normalize user object
+        const user: AppUser = {
+            uid: data.user.uid,
+            name: data.user.name,
+            email: data.user.email,
+            phone: data.user.phone,
+            role: data.user.role,
+        };
+
+        await SecureStore.setItemAsync(USER_KEY, JSON.stringify(user));
+        return { success: true, user, message: 'Registered successfully.' };
+    } catch (error: any) {
+        const msg =
+            error.response?.data?.detail ??
+            error.response?.data?.email?.[0] ??
+            error.response?.data?.message ??
+            Object.values(error.response?.data ?? {})?.[0] ??
+            'Registration failed. Please try again.';
+        return { success: false, message: String(msg) };
+    }
 }
 
-export async function registerUser(
-    userData: AppUser & { password: string }
-): Promise<{ success: boolean; message: string }> {
-    const users = await getAllUsers();
-    if (users.find((u) => u.email === userData.email))
-        return { success: false, message: 'Email is already registered.' };
-    users.push(userData);
-    await AsyncStorage.setItem(USERS_KEY, JSON.stringify(users));
-    await AsyncStorage.setItem(CURRENT_USER_KEY, JSON.stringify(userData));
-    return { success: true, message: 'Registered successfully.' };
-}
-
+// ─── Login ────────────────────────────────────────────────────────────────────
 export async function loginUser(
     email: string,
     password: string
 ): Promise<{ success: boolean; user?: AppUser; message: string }> {
-    const users = await getAllUsers();
-    const found = users.find((u) => u.email === email && u.password === password);
-    if (!found) return { success: false, message: 'Invalid email or password.' };
-    await AsyncStorage.setItem(CURRENT_USER_KEY, JSON.stringify(found));
-    const { password: _, ...user } = found;
-    return { success: true, user: user as AppUser, message: 'Login successful.' };
+    try {
+        const { data } = await api.post('/auth/login/', { email, password });
+
+        // Save tokens
+        await SecureStore.setItemAsync(ACCESS_KEY, data.access);
+        await SecureStore.setItemAsync(REFRESH_KEY, data.refresh);
+
+        // Normalize user object
+        const user: AppUser = {
+            uid: data.user.uid,
+            name: data.user.name,
+            email: data.user.email,
+            phone: data.user.phone,
+            role: data.user.role,
+        };
+
+        await SecureStore.setItemAsync(USER_KEY, JSON.stringify(user));
+        return { success: true, user, message: 'Login successful.' };
+    } catch (error: any) {
+        const msg =
+            error.response?.data?.detail ??
+            error.response?.data?.non_field_errors?.[0] ??
+            error.response?.data?.message ??
+            'Invalid email or password.';
+        return { success: false, message: String(msg) };
+    }
 }
 
+// ─── Logout ───────────────────────────────────────────────────────────────────
 export async function logoutUser(): Promise<void> {
-    await AsyncStorage.removeItem(CURRENT_USER_KEY);
+    try {
+        const refresh = await SecureStore.getItemAsync(REFRESH_KEY);
+        if (refresh) await api.post('/auth/logout/', { refresh });
+    } catch {
+        // Silently fail — still clear local tokens
+    } finally {
+        await SecureStore.deleteItemAsync(ACCESS_KEY);
+        await SecureStore.deleteItemAsync(REFRESH_KEY);
+        await SecureStore.deleteItemAsync(USER_KEY);
+    }
 }
 
+// ─── Get stored user (on app boot) ───────────────────────────────────────────
 export async function getStoredUser(): Promise<AppUser | null> {
-    const raw = await AsyncStorage.getItem(CURRENT_USER_KEY);
-    if (!raw) return null;
-    const { password: _, ...user } = JSON.parse(raw);
-    return user as AppUser;
+    try {
+        const raw = await SecureStore.getItemAsync(USER_KEY);
+        if (!raw) return null;
+        return JSON.parse(raw) as AppUser;
+    } catch {
+        return null;
+    }
 }

@@ -88,3 +88,42 @@ export async function updateBookingFields(
         await AsyncStorage.setItem(BOOKINGS_KEY, JSON.stringify(bookings));
     }
 }
+
+
+// ─── Add these two functions to utils/storage.ts ─────────────────────────────
+
+// Get garage by owner UID — guaranteed to return or create
+export async function getOrCreateGarage(ownerUid: string, ownerName: string): Promise<Garage> {
+    const all: Garage[] = JSON.parse(
+        (await AsyncStorage.getItem('@bikeservice_garages')) ?? '[]'
+    );
+    const existing = all.find((g) => g.ownerUid === ownerUid);
+    if (existing) return existing;
+
+    // Create a blank garage for this owner
+    const newGarage: Garage = {
+        id: ownerUid,          // use ownerUid as garageId for easy lookup
+        ownerUid,
+        name: `${ownerName}'s Garage`,
+        address: '',
+        phone: '',
+        latitude: 0,
+        longitude: 0,
+        schedule: [],
+        services: { bike: [], scooty: [] },
+    };
+    all.push(newGarage);
+    await AsyncStorage.setItem('@bikeservice_garages', JSON.stringify(all));
+    return newGarage;
+}
+
+// Save full garage object (create or overwrite by id)
+export async function saveGarageById(garage: Garage): Promise<void> {
+    const all: Garage[] = JSON.parse(
+        (await AsyncStorage.getItem('@bikeservice_garages')) ?? '[]'
+    );
+    const idx = all.findIndex((g) => g.id === garage.id);
+    if (idx >= 0) all[idx] = garage;
+    else all.push(garage);
+    await AsyncStorage.setItem('@bikeservice_garages', JSON.stringify(all));
+}

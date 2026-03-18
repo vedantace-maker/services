@@ -1,520 +1,422 @@
 import React, { useState, useCallback } from 'react';
 import {
-    View, Text, FlatList, StyleSheet, ActivityIndicator,
-    TouchableOpacity, Alert, Modal, TextInput, ScrollView
+    View, Text, StyleSheet, FlatList,
+    TouchableOpacity, Modal, TextInput, ActivityIndicator
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { getBookingsByGarage, updateBookingFields  } from '../../utils/storage';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuthStore } from '../../store/authStore';
-import { Booking, BookingStatus } from '../../types';
-// import { getBookingsByGarage, updateBookingStatus, getAllBookings, addBooking, updateBookingFields  } from '../../utils/storage';
-// import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getOrCreateGarage, getBookingsByGarage, updateBookingFields } from '../../utils/storage';
+import { Booking } from '../../types';
+import { Colors, Typography, Spacing, Radius, Shadow } from '../../constants/theme';
+import Toast from '../../components/Toast';
+import { useToast } from '../../hooks/useToast';
 
+type Filter = 'all' | 'pending' | 'accepted' | 'in_progress' | 'completed';
 
-// ─── Update any booking field ─────────────────────────────────────────────────
-// async function updateBookingFields(bookingId: string, fields: Partial<Booking>): Promise<void> {
-//     const raw = await AsyncStorage.getItem('@bikeservice_bookings');
-//     const bookings: Booking[] = raw ? JSON.parse(raw) : [];
-//     const idx = bookings.findIndex((b) => b.id === bookingId);
-//     if (idx >= 0) {
-//         bookings[idx] = { ...bookings[idx], ...fields };
-//         await AsyncStorage.setItem('@bikeservice_bookings', JSON.stringify(bookings));
-//     }
-// }
+const FILTERS: { key: Filter; label: string }[] = [
+    { key: 'all', label: 'All' },
+    { key: 'pending', label: 'Pending' },
+    { key: 'accepted', label: 'Accepted' },
+    { key: 'in_progress', label: 'Active' },
+    { key: 'completed', label: 'Completed' },
+];
 
-// ─── Status config ────────────────────────────────────────────────────────────
-const STATUS_CONFIG: Record<BookingStatus, { bg: string; text: string; label: string; icon: string }> = {
-    pending: { bg: '#FEF9C3', text: '#854D0E', label: 'Pending', icon: '⏳' },
-    accepted: { bg: '#DCFCE7', text: '#166534', label: 'Accepted', icon: '✅' },
-    rejected: { bg: '#FEE2E2', text: '#991B1B', label: 'Rejected', icon: '❌' },
-    in_progress: { bg: '#DBEAFE', text: '#1E40AF', label: 'In Service', icon: '🔧' },
-    completed: { bg: '#F0FDF4', text: '#15803D', label: 'Completed', icon: '🎉' },
-    cancelled: { bg: '#F4F4F5', text: '#71717A', label: 'Cancelled', icon: '🚫' },
-};
-
-// ─── Duration Picker Modal ────────────────────────────────────────────────────
-const DURATION_OPTIONS = [15, 30, 45, 60, 90, 120, 150, 180];
-
-interface DurationModalProps {
-    visible: boolean;
-    onClose: () => void;
-    onConfirm: (minutes: number) => void;
-}
-
-function DurationModal({ visible, onClose, onConfirm }: DurationModalProps) {
-    const [selected, setSelected] = useState(60);
-
-    return (
-        <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-            <TouchableOpacity style={mStyles.backdrop} activeOpacity={1} onPress={onClose}>
-                <View style={mStyles.sheet}>
-                    <View style={mStyles.header}>
-                        <Text style={mStyles.title}>⏱️ Set Estimated Service Time</Text>
-                        <TouchableOpacity onPress={onClose}>
-                            <Text style={mStyles.close}>✕</Text>
-                        </TouchableOpacity>
-                    </View>
-                    <Text style={mStyles.subtitle}>How long will this service take?</Text>
-
-                    <View style={mStyles.optionsGrid}>
-                        {DURATION_OPTIONS.map((min) => (
-                            <TouchableOpacity
-                                key={min}
-                                style={[mStyles.option, selected === min && mStyles.optionActive]}
-                                onPress={() => setSelected(min)}
-                            >
-                                <Text style={[mStyles.optionText, selected === min && mStyles.optionTextActive]}>
-                                    {min < 60
-                                        ? `${min} min`
-                                        : min === 60
-                                            ? '1 hr'
-                                            : `${Math.floor(min / 60)}h ${min % 60 > 0 ? `${min % 60}m` : ''}`}
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-
-                    <TouchableOpacity
-                        style={mStyles.confirmBtn}
-                        onPress={() => { onConfirm(selected); onClose(); }}
-                    >
-                        <Text style={mStyles.confirmBtnText}>Confirm Duration</Text>
-                    </TouchableOpacity>
-                </View>
-            </TouchableOpacity>
-        </Modal>
-    );
-}
-
-const mStyles = StyleSheet.create({
-    backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-    sheet: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 36 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-    title: { fontSize: 16, fontWeight: 'bold', color: '#222' },
-    close: { fontSize: 18, color: '#aaa', padding: 4 },
-    subtitle: { color: '#888', fontSize: 13, marginBottom: 16 },
-    optionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
-    option: {
-        borderWidth: 1.5, borderColor: '#ddd', borderRadius: 10,
-        paddingVertical: 10, paddingHorizontal: 14, backgroundColor: '#fff'
-    },
-    optionActive: { borderColor: '#FF6B35', backgroundColor: '#FF6B35' },
-    optionText: { color: '#555', fontWeight: '600', fontSize: 14 },
-    optionTextActive: { color: '#fff' },
-    confirmBtn: { backgroundColor: '#FF6B35', padding: 14, borderRadius: 12, alignItems: 'center' },
-    confirmBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
-});
-
-// ─── Reject Note Modal ─────────────────────────────────────────────────────────
-interface RejectModalProps {
-    visible: boolean;
-    onClose: () => void;
-    onConfirm: (note: string) => void;
-}
-
-function RejectModal({ visible, onClose, onConfirm }: RejectModalProps) {
-    const [note, setNote] = useState('');
-    return (
-        <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-            <TouchableOpacity style={rStyles.backdrop} activeOpacity={1} onPress={onClose}>
-                <View style={rStyles.sheet}>
-                    <View style={rStyles.header}>
-                        <Text style={rStyles.title}>❌ Reject Booking</Text>
-                        <TouchableOpacity onPress={onClose}>
-                            <Text style={rStyles.close}>✕</Text>
-                        </TouchableOpacity>
-                    </View>
-                    <Text style={rStyles.subtitle}>Optionally add a reason (visible to customer)</Text>
-                    <TextInput
-                        style={rStyles.input}
-                        placeholder="e.g. Slot already taken, garage maintenance..."
-                        value={note}
-                        onChangeText={setNote}
-                        multiline
-                        numberOfLines={3}
-                        placeholderTextColor="#aaa"
-                    />
-                    <View style={rStyles.btnRow}>
-                        <TouchableOpacity style={rStyles.cancelBtn} onPress={onClose}>
-                            <Text style={rStyles.cancelText}>Cancel</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={rStyles.rejectBtn}
-                            onPress={() => { onConfirm(note.trim()); setNote(''); onClose(); }}
-                        >
-                            <Text style={rStyles.rejectText}>Reject Booking</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </TouchableOpacity>
-        </Modal>
-    );
-}
-
-const rStyles = StyleSheet.create({
-    backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-    sheet: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 36 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-    title: { fontSize: 16, fontWeight: 'bold', color: '#222' },
-    close: { fontSize: 18, color: '#aaa', padding: 4 },
-    subtitle: { color: '#888', fontSize: 13, marginBottom: 12 },
-    input: {
-        borderWidth: 1, borderColor: '#ddd', borderRadius: 10,
-        padding: 12, fontSize: 14, color: '#222', marginBottom: 16,
-        textAlignVertical: 'top', minHeight: 80
-    },
-    btnRow: { flexDirection: 'row', gap: 10 },
-    cancelBtn: { flex: 1, borderWidth: 1, borderColor: '#ddd', padding: 13, borderRadius: 10, alignItems: 'center' },
-    cancelText: { color: '#888', fontWeight: '600' },
-    rejectBtn: { flex: 1, backgroundColor: '#EF4444', padding: 13, borderRadius: 10, alignItems: 'center' },
-    rejectText: { color: '#fff', fontWeight: 'bold' },
-});
-
-// ─── Booking Card ─────────────────────────────────────────────────────────────
-interface BookingCardProps {
-    item: Booking;
-    onRefresh: () => void;
-}
-
-function BookingCard({ item, onRefresh }: BookingCardProps) {
-    const [expanded, setExpanded] = useState(false);
-    const [durationModalVisible, setDurationModalVisible] = useState(false);
-    const [rejectModalVisible, setRejectModalVisible] = useState(false);
-
-    const cfg = STATUS_CONFIG[item.status] ?? STATUS_CONFIG.pending;
-
-    const handleAccept = async () => {
-        await updateBookingFields(item.id, { status: 'accepted' });
-        Alert.alert('✅ Accepted', `Booking for ${item.customerName} has been accepted.`);
-        onRefresh();
+function getStatusBg(s: string) {
+    const m: Record<string, object> = {
+        pending: { backgroundColor: Colors.warningLight },
+        accepted: { backgroundColor: Colors.successLight },
+        rejected: { backgroundColor: Colors.errorLight },
+        in_progress: { backgroundColor: Colors.infoLight },
+        completed: { backgroundColor: '#F0FDF4' },
+        cancelled: { backgroundColor: Colors.surfaceAlt },
     };
-
-    const handleReject = async (note: string) => {
-        await updateBookingFields(item.id, { status: 'rejected', rejectionNote: note || undefined });
-        Alert.alert('Booking Rejected', `Booking for ${item.customerName} has been rejected.`);
-        onRefresh();
-    };
-
-    const handleStartService = async () => {
-        Alert.alert(
-            '🔧 Start Service',
-            `Start servicing ${item.customerName}'s vehicle now?`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Start',
-                    onPress: async () => {
-                        await updateBookingFields(item.id, {
-                            status: 'in_progress',
-                            serviceStartedAt: Date.now(),
-                        });
-                        onRefresh();
-                    },
-                },
-            ]
-        );
-    };
-
-    const handleSetDuration = async (minutes: number) => {
-        await updateBookingFields(item.id, { estimatedDurationMin: minutes });
-        Alert.alert('⏱️ Duration Set', `Estimated service time set to ${minutes} minutes.`);
-        onRefresh();
-    };
-
-    const handleComplete = async () => {
-        Alert.alert(
-            '🎉 Complete Service',
-            'Mark this service as completed?',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Complete',
-                    onPress: async () => {
-                        await updateBookingFields(item.id, {
-                            status: 'completed',
-                            completedAt: Date.now(),
-                        });
-                        onRefresh();
-                    },
-                },
-            ]
-        );
-    };
-
-    return (
-        <View style={cardStyles.card}>
-
-            {/* ── Top Row ─────────────────────────────────────────── */}
-            <View style={cardStyles.topRow}>
-                <View style={{ flex: 1 }}>
-                    <Text style={cardStyles.customerName}>👤 {item.customerName}</Text>
-                    <Text style={cardStyles.info}>📅 {item.date}   🕐 {item.time}</Text>
-                    <Text style={cardStyles.bike}>🛵 {item.bikeDetails}</Text>
-                </View>
-                <View style={[cardStyles.badge, { backgroundColor: cfg.bg }]}>
-                    <Text style={[cardStyles.badgeText, { color: cfg.text }]}>
-                        {cfg.icon} {cfg.label}
-                    </Text>
-                </View>
-            </View>
-
-            {/* ── Extra info when in_progress ─────────────────────── */}
-            {item.status === 'in_progress' && item.estimatedDurationMin != null ? (
-                <View style={cardStyles.infoRow}>
-                    <Text style={cardStyles.infoRowText}>
-                        ⏱️ Estimated: {item.estimatedDurationMin} min
-                    </Text>
-                    {item.serviceStartedAt != null ? (
-                        <Text style={cardStyles.infoRowText}>
-                            🚀 Started: {new Date(item.serviceStartedAt).toLocaleTimeString()}
-                        </Text>
-                    ) : null}
-                </View>
-            ) : null}
-
-            {item.status === 'completed' && item.completedAt != null ? (
-                <Text style={cardStyles.completedText}>
-                    🎉 Completed at {new Date(item.completedAt).toLocaleTimeString()}
-                </Text>
-            ) : null}
-
-            {item.status === 'rejected' && item.rejectionNote ? (
-                <Text style={cardStyles.rejectNote}>📝 {item.rejectionNote}</Text>
-            ) : null}
-
-            {/* ── PENDING: Accept / Reject ─────────────────────────── */}
-            {item.status === 'pending' ? (
-                <View style={cardStyles.actionRow}>
-                    <TouchableOpacity
-                        style={[cardStyles.actionBtn, cardStyles.rejectBtn]}
-                        onPress={() => setRejectModalVisible(true)}
-                    >
-                        <Text style={cardStyles.rejectBtnText}>✕  Reject</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[cardStyles.actionBtn, cardStyles.acceptBtn]}
-                        onPress={handleAccept}
-                    >
-                        <Text style={cardStyles.acceptBtnText}>✓  Accept</Text>
-                    </TouchableOpacity>
-                </View>
-            ) : null}
-
-            {/* ── ACCEPTED / IN_PROGRESS: More Details ─────────────── */}
-            {item.status === 'accepted' || item.status === 'in_progress' ? (
-                <>
-                    <TouchableOpacity
-                        style={cardStyles.moreDetailsBtn}
-                        onPress={() => setExpanded((v) => !v)}
-                    >
-                        <Text style={cardStyles.moreDetailsBtnText}>
-                            {expanded ? '▲  Hide Details' : '▼  More Details'}
-                        </Text>
-                    </TouchableOpacity>
-
-                    {expanded ? (
-                        <View style={cardStyles.detailsPanel}>
-
-                            {/* Start Service */}
-                            {item.status === 'accepted' ? (
-                                <TouchableOpacity
-                                    style={[cardStyles.serviceBtn, { backgroundColor: '#2563EB' }]}
-                                    onPress={handleStartService}
-                                >
-                                    <Text style={cardStyles.serviceBtnIcon}>🔧</Text>
-                                    <View>
-                                        <Text style={cardStyles.serviceBtnTitle}>Start Service</Text>
-                                        <Text style={cardStyles.serviceBtnSub}>Mark vehicle intake & begin work</Text>
-                                    </View>
-                                </TouchableOpacity>
-                            ) : null}
-
-                            {/* Set Service Time */}
-                            {item.status === 'in_progress' ? (
-                                <TouchableOpacity
-                                    style={[cardStyles.serviceBtn, { backgroundColor: '#7C3AED' }]}
-                                    onPress={() => setDurationModalVisible(true)}
-                                >
-                                    <Text style={cardStyles.serviceBtnIcon}>⏱️</Text>
-                                    <View>
-                                        <Text style={cardStyles.serviceBtnTitle}>
-                                            {item.estimatedDurationMin != null
-                                                ? `Update Duration (${item.estimatedDurationMin} min)`
-                                                : 'Set Service Time'}
-                                        </Text>
-                                        <Text style={cardStyles.serviceBtnSub}>Set estimated completion time</Text>
-                                    </View>
-                                </TouchableOpacity>
-                            ) : null}
-
-                            {/* Complete Service */}
-                            {item.status === 'in_progress' ? (
-                                <TouchableOpacity
-                                    style={[cardStyles.serviceBtn, { backgroundColor: '#16A34A' }]}
-                                    onPress={handleComplete}
-                                >
-                                    <Text style={cardStyles.serviceBtnIcon}>🎉</Text>
-                                    <View>
-                                        <Text style={cardStyles.serviceBtnTitle}>Mark as Completed</Text>
-                                        <Text style={cardStyles.serviceBtnSub}>Vehicle is ready for pickup</Text>
-                                    </View>
-                                </TouchableOpacity>
-                            ) : null}
-
-                        </View>
-                    ) : null}
-                </>
-            ) : null}
-
-            {/* Modals */}
-            <DurationModal
-                visible={durationModalVisible}
-                onClose={() => setDurationModalVisible(false)}
-                onConfirm={handleSetDuration}
-            />
-            <RejectModal
-                visible={rejectModalVisible}
-                onClose={() => setRejectModalVisible(false)}
-                onConfirm={handleReject}
-            />
-        </View>
-    );
+    return m[s] ?? m.pending;
 }
 
-const cardStyles = StyleSheet.create({
-    card: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 14, elevation: 3 },
-    topRow: { flexDirection: 'row', gap: 10 },
-    customerName: { fontSize: 16, fontWeight: 'bold', color: '#222' },
-    info: { color: '#555', marginTop: 4, fontSize: 13 },
-    bike: { color: '#888', marginTop: 2, fontSize: 13 },
-    badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, alignSelf: 'flex-start' },
-    badgeText: { fontSize: 11, fontWeight: '700' },
+function getStatusColor(s: string) {
+    const m: Record<string, object> = {
+        pending: { color: '#92400E' },
+        accepted: { color: '#065F46' },
+        rejected: { color: '#991B1B' },
+        in_progress: { color: '#1E40AF' },
+        completed: { color: '#14532D' },
+        cancelled: { color: '#374151' },
+    };
+    return m[s] ?? m.pending;
+}
 
-    infoRow: { backgroundColor: '#EFF6FF', borderRadius: 8, padding: 10, marginTop: 10, gap: 4 },
-    infoRowText: { color: '#1E40AF', fontSize: 12 },
-    completedText: { color: '#15803D', fontSize: 13, marginTop: 8 },
-    rejectNote: { color: '#991B1B', fontSize: 12, marginTop: 6 },
-
-    // Accept / Reject buttons
-    actionRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
-    actionBtn: { flex: 1, padding: 12, borderRadius: 10, alignItems: 'center' },
-    rejectBtn: { backgroundColor: '#FEE2E2', borderWidth: 1, borderColor: '#FECACA' },
-    rejectBtnText: { color: '#DC2626', fontWeight: '700', fontSize: 14 },
-    acceptBtn: { backgroundColor: '#DCFCE7', borderWidth: 1, borderColor: '#BBF7D0' },
-    acceptBtnText: { color: '#16A34A', fontWeight: '700', fontSize: 14 },
-
-    // More details toggle
-    moreDetailsBtn: {
-        marginTop: 12, paddingVertical: 10, borderRadius: 8,
-        backgroundColor: '#f9f9f9', alignItems: 'center',
-        borderWidth: 1, borderColor: '#eee'
-    },
-    moreDetailsBtnText: { color: '#FF6B35', fontWeight: '600', fontSize: 13 },
-
-    // Expanded details panel
-    detailsPanel: { marginTop: 10, gap: 10 },
-    serviceBtn: {
-        flexDirection: 'row', alignItems: 'center', gap: 14,
-        padding: 14, borderRadius: 12,
-    },
-    serviceBtnIcon: { fontSize: 24 },
-    serviceBtnTitle: { color: '#fff', fontWeight: '700', fontSize: 14 },
-    serviceBtnSub: { color: 'rgba(255,255,255,0.75)', fontSize: 11, marginTop: 2 },
-});
-
-// ─── Main Screen ──────────────────────────────────────────────────────────────
-export default function ViewBookingsScreen() {
+export default function OwnerBookings() {
     const user = useAuthStore((s) => s.user);
+    const { toast, showToast, hideToast } = useToast();
+
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [loading, setLoading] = useState(true);
-    const [filter, setFilter] = useState<BookingStatus | 'all'>('all');
+    const [filter, setFilter] = useState<Filter>('all');
 
-    useFocusEffect(
-        useCallback(() => {
-            loadBookings();
-        }, [])
-    );
+    // Duration modal
+    const [durationModal, setDurationModal] = useState(false);
+    const [durationInput, setDurationInput] = useState('');
+    const [activeBid, setActiveBid] = useState('');
 
-    const loadBookings = async () => {
+    // Reject note modal
+    const [rejectModal, setRejectModal] = useState(false);
+    const [rejectNote, setRejectNote] = useState('');
+    const [activeRejectId, setActiveRejectId] = useState('');
+
+    useFocusEffect(useCallback(() => { load(); }, []));
+
+    const load = async () => {
         setLoading(true);
-        const data = await getBookingsByGarage(user!.uid);
-        setBookings(data);
+        const g = await getOrCreateGarage(user!.uid, user!.name);
+        const b = await getBookingsByGarage(g.id);
+        setBookings(b.sort((a, b) => b.createdAt - a.createdAt));
         setLoading(false);
     };
 
-    const FILTERS: { key: BookingStatus | 'all'; label: string }[] = [
-        { key: 'all', label: 'All' },
-        { key: 'pending', label: '⏳ Pending' },
-        { key: 'accepted', label: '✅ Accepted' },
-        { key: 'in_progress', label: '🔧 In Service' },
-        { key: 'completed', label: '🎉 Done' },
-        { key: 'rejected', label: '❌ Rejected' },
-    ];
+    const act = async (id: string, fields: Partial<Booking>) => {
+        await updateBookingFields(id, fields);
+        load();
+    };
 
     const filtered = filter === 'all'
         ? bookings
         : bookings.filter((b) => b.status === filter);
 
-    if (loading) return <ActivityIndicator style={{ flex: 1 }} color="#FF6B35" />;
+    if (loading) return <ActivityIndicator style={{ flex: 1 }} color={Colors.primary} />;
 
     return (
-        <View style={screenStyles.container}>
+        <View style={styles.container}>
 
-            {/* Filter tabs */}
-            <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={screenStyles.filterBar}
-                contentContainerStyle={{ gap: 8, paddingHorizontal: 2, paddingVertical: 4 }}
-            >
+            {/* ── Header ─────────────────────────────────────────────────── */}
+            <View style={styles.header}>
+                <Text style={styles.title}>Bookings</Text>
+                <Text style={styles.subtitle}>{bookings.length} total</Text>
+            </View>
+
+            {/* ── Filter chips ───────────────────────────────────────────── */}
+            <View style={styles.filterWrap}>
                 {FILTERS.map((f) => (
                     <TouchableOpacity
                         key={f.key}
-                        style={[screenStyles.filterChip, filter === f.key && screenStyles.filterChipActive]}
+                        style={[styles.filterChip, filter === f.key && styles.filterChipActive]}
                         onPress={() => setFilter(f.key)}
                     >
-                        <Text style={[screenStyles.filterChipText, filter === f.key && screenStyles.filterChipTextActive]}>
+                        <Text style={[styles.filterChipText, filter === f.key && styles.filterChipTextActive]}>
                             {f.label}
                         </Text>
                     </TouchableOpacity>
                 ))}
-            </ScrollView>
+            </View>
 
+            {/* ── List ───────────────────────────────────────────────────── */}
             <FlatList
                 data={filtered}
                 keyExtractor={(b) => b.id}
+                contentContainerStyle={styles.list}
+                onRefresh={load}
+                refreshing={loading}
                 renderItem={({ item }) => (
-                    <BookingCard item={item} onRefresh={loadBookings} />
+                    <View style={styles.card}>
+
+                        {/* Card header */}
+                        <View style={styles.cardHeader}>
+                            <View style={styles.customerIconBox}>
+                                <Ionicons name="person-outline" size={18} color={Colors.textSecondary} />
+                            </View>
+                            <View style={styles.cardHeaderInfo}>
+                                <Text style={styles.customerName}>{item.customerName}</Text>
+                                <Text style={styles.bookingMeta}>{item.bikeDetails}</Text>
+                            </View>
+                            <View style={[styles.statusPill, getStatusBg(item.status)]}>
+                                <Text style={[styles.statusPillText, getStatusColor(item.status)]}>
+                                    {item.status.replace('_', ' ')}
+                                </Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.divider} />
+
+                        {/* Date & time */}
+                        <View style={styles.metaRow}>
+                            <View style={styles.metaItem}>
+                                <Ionicons name="calendar-outline" size={14} color={Colors.textTertiary} />
+                                <Text style={styles.metaText}>{item.date}</Text>
+                            </View>
+                            <View style={styles.metaDot} />
+                            <View style={styles.metaItem}>
+                                <Ionicons name="time-outline" size={14} color={Colors.textTertiary} />
+                                <Text style={styles.metaText}>{item.time}</Text>
+                            </View>
+                        </View>
+
+                        {/* Action buttons */}
+                        <View style={styles.actionsRow}>
+
+                            {item.status === 'pending' && (
+                                <>
+                                    <TouchableOpacity
+                                        style={[styles.actionBtn, { backgroundColor: Colors.successLight, borderColor: Colors.success + '40' }]}
+                                        onPress={() => {
+                                            act(item.id, { status: 'accepted' });
+                                            showToast('Booking accepted successfully.', 'success');
+                                        }}
+                                    >
+                                        <Ionicons name="checkmark" size={15} color={Colors.success} />
+                                        <Text style={[styles.actionBtnText, { color: Colors.success }]}>Accept</Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        style={[styles.actionBtn, { backgroundColor: Colors.errorLight, borderColor: Colors.error + '40' }]}
+                                        onPress={() => {
+                                            setActiveRejectId(item.id);
+                                            setRejectNote('');
+                                            setRejectModal(true);
+                                        }}
+                                    >
+                                        <Ionicons name="close" size={15} color={Colors.error} />
+                                        <Text style={[styles.actionBtnText, { color: Colors.error }]}>Decline</Text>
+                                    </TouchableOpacity>
+                                </>
+                            )}
+
+                            {item.status === 'accepted' && (
+                                <TouchableOpacity
+                                    style={[styles.actionBtn, { backgroundColor: Colors.infoLight, borderColor: Colors.info + '40' }]}
+                                    onPress={() => {
+                                        setActiveBid(item.id);
+                                        setDurationInput('');
+                                        setDurationModal(true);
+                                        act(item.id, { status: 'in_progress', serviceStartedAt: Date.now() });
+                                        showToast('Service started.', 'info');
+                                    }}
+                                >
+                                    <Ionicons name="build-outline" size={15} color={Colors.info} />
+                                    <Text style={[styles.actionBtnText, { color: Colors.info }]}>Start Service</Text>
+                                </TouchableOpacity>
+                            )}
+
+                            {item.status === 'in_progress' && (
+                                <>
+                                    <TouchableOpacity
+                                        style={[styles.actionBtn, { backgroundColor: Colors.warningLight, borderColor: Colors.warning + '40' }]}
+                                        onPress={() => {
+                                            setActiveBid(item.id);
+                                            setDurationInput('');
+                                            setDurationModal(true);
+                                        }}
+                                    >
+                                        <Ionicons name="timer-outline" size={15} color={Colors.warning} />
+                                        <Text style={[styles.actionBtnText, { color: Colors.warning }]}>Set Duration</Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        style={[styles.actionBtn, { backgroundColor: Colors.successLight, borderColor: Colors.success + '40' }]}
+                                        onPress={() => {
+                                            act(item.id, { status: 'completed', completedAt: Date.now() });
+                                            showToast('Service marked as completed.', 'success');
+                                        }}
+                                    >
+                                        <Ionicons name="checkmark-done" size={15} color={Colors.success} />
+                                        <Text style={[styles.actionBtnText, { color: Colors.success }]}>Complete</Text>
+                                    </TouchableOpacity>
+                                </>
+                            )}
+
+                        </View>
+
+                        {item.estimatedDurationMin != null && item.status === 'in_progress' && (
+                            <View style={styles.durationStrip}>
+                                <Ionicons name="timer-outline" size={13} color={Colors.info} />
+                                <Text style={styles.durationText}>
+                                    Estimated: {item.estimatedDurationMin} min
+                                </Text>
+                            </View>
+                        )}
+
+                    </View>
                 )}
                 ListEmptyComponent={
-                    <View style={screenStyles.emptyBox}>
-                        <Text style={screenStyles.emptyText}>No bookings here.</Text>
-                        <Text style={screenStyles.emptyHint}>
-                            {filter === 'all'
-                                ? 'Make sure your schedule is set up.'
-                                : `No ${filter} bookings yet.`}
+                    <View style={styles.empty}>
+                        <Ionicons name="calendar-outline" size={48} color={Colors.textTertiary} />
+                        <Text style={styles.emptyTitle}>No bookings</Text>
+                        <Text style={styles.emptyDesc}>
+                            Bookings matching this filter will appear here.
                         </Text>
                     </View>
                 }
-                onRefresh={loadBookings}
-                refreshing={loading}
-                contentContainerStyle={{ paddingBottom: 30 }}
             />
+
+            {/* ── Duration Modal ─────────────────────────────────────────── */}
+            <Modal
+                visible={durationModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setDurationModal(false)}
+            >
+                <View style={styles.modalBackdrop}>
+                    <View style={styles.modalSheet}>
+                        <Text style={styles.modalTitle}>Estimated Duration</Text>
+                        <Text style={styles.modalSubtitle}>How long will this service take?</Text>
+                        <TextInput
+                            style={styles.modalInput}
+                            placeholder="e.g. 45"
+                            keyboardType="numeric"
+                            value={durationInput}
+                            onChangeText={setDurationInput}
+                            placeholderTextColor={Colors.textTertiary}
+                        />
+                        <Text style={styles.modalHint}>Enter duration in minutes</Text>
+                        <TouchableOpacity
+                            style={styles.modalBtn}
+                            onPress={() => {
+                                const min = parseInt(durationInput);
+                                if (isNaN(min) || min <= 0) {
+                                    showToast('Please enter a valid number of minutes.', 'error');
+                                    return;
+                                }
+                                act(activeBid, { estimatedDurationMin: min });
+                                setDurationModal(false);
+                                showToast(`Duration set to ${min} minutes.`, 'info');
+                            }}
+                        >
+                            <Text style={styles.modalBtnText}>Confirm</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.modalCancelBtn}
+                            onPress={() => setDurationModal(false)}
+                        >
+                            <Text style={styles.modalCancelText}>Cancel</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ── Reject Modal ───────────────────────────────────────────── */}
+            <Modal
+                visible={rejectModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setRejectModal(false)}
+            >
+                <View style={styles.modalBackdrop}>
+                    <View style={styles.modalSheet}>
+                        <Text style={styles.modalTitle}>Decline Booking</Text>
+                        <Text style={styles.modalSubtitle}>
+                            Add an optional note for the customer
+                        </Text>
+                        <TextInput
+                            style={[styles.modalInput, { fontSize: 15, fontWeight: '400', minHeight: 80 }]}
+                            placeholder="e.g. Slot unavailable due to emergency"
+                            value={rejectNote}
+                            onChangeText={setRejectNote}
+                            multiline
+                            placeholderTextColor={Colors.textTertiary}
+                        />
+                        <TouchableOpacity
+                            style={[styles.modalBtn, { backgroundColor: Colors.error }]}
+                            onPress={() => {
+                                act(activeRejectId, { status: 'rejected', rejectionNote: rejectNote.trim() });
+                                setRejectModal(false);
+                                showToast('Booking declined.', 'warning');
+                            }}
+                        >
+                            <Text style={styles.modalBtnText}>Decline Booking</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.modalCancelBtn}
+                            onPress={() => setRejectModal(false)}
+                        >
+                            <Text style={styles.modalCancelText}>Cancel</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ── Toast ──────────────────────────────────────────────────── */}
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                onHide={hideToast}
+            />
+
         </View>
     );
 }
 
-const screenStyles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f9f9f9', padding: 16 },
-    filterBar: { marginBottom: 12, flexGrow: 0 },
-    filterChip: {
-        borderWidth: 1.5, borderColor: '#ddd', borderRadius: 20,
-        paddingHorizontal: 14, paddingVertical: 7, backgroundColor: '#fff'
+const styles = StyleSheet.create({
+    container: { flex: 1, backgroundColor: Colors.bg },
+
+    header: {
+        backgroundColor: Colors.surface, paddingHorizontal: Spacing.md,
+        paddingTop: 56, paddingBottom: Spacing.md,
+        borderBottomWidth: 1, borderBottomColor: Colors.borderLight,
     },
-    filterChipActive: { borderColor: '#FF6B35', backgroundColor: '#FF6B35' },
-    filterChipText: { color: '#666', fontWeight: '600', fontSize: 13 },
-    filterChipTextActive: { color: '#fff' },
-    emptyBox: { alignItems: 'center', marginTop: 60 },
-    emptyText: { color: '#888', fontSize: 16 },
-    emptyHint: { color: '#bbb', fontSize: 13, marginTop: 6 },
+    title: { ...Typography.h1, color: Colors.textPrimary },
+    subtitle: { ...Typography.caption, color: Colors.textTertiary, marginTop: 4 },
+
+    filterWrap: {
+        flexDirection: 'row', gap: Spacing.xs,
+        paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
+        backgroundColor: Colors.surface,
+        borderBottomWidth: 1, borderBottomColor: Colors.borderLight,
+    },
+    filterChip: { paddingHorizontal: Spacing.md, paddingVertical: 6, borderRadius: Radius.full, backgroundColor: Colors.surfaceAlt },
+    filterChipActive: { backgroundColor: Colors.primaryLight },
+    filterChipText: { ...Typography.caption, color: Colors.textSecondary, fontWeight: '500' },
+    filterChipTextActive: { color: Colors.primary, fontWeight: '700' },
+
+    list: { padding: Spacing.md, gap: Spacing.sm, paddingBottom: 32 },
+
+    card: {
+        backgroundColor: Colors.surface, borderRadius: Radius.lg,
+        borderWidth: 1, borderColor: Colors.border,
+        ...Shadow.sm, overflow: 'hidden',
+    },
+    cardHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, padding: Spacing.md },
+    customerIconBox: { width: 38, height: 38, borderRadius: Radius.sm, backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+    cardHeaderInfo: { flex: 1 },
+    customerName: { ...Typography.body, color: Colors.textPrimary, fontWeight: '600' },
+    bookingMeta: { ...Typography.caption, color: Colors.textTertiary, marginTop: 2 },
+    statusPill: { paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: Radius.full },
+    statusPillText: { ...Typography.overline, fontWeight: '600', textTransform: 'capitalize' },
+
+    divider: { height: 1, backgroundColor: Colors.borderLight },
+    metaRow: { flexDirection: 'row', alignItems: 'center', padding: Spacing.md, paddingBottom: Spacing.sm },
+    metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    metaText: { ...Typography.caption, color: Colors.textSecondary },
+    metaDot: { width: 3, height: 3, borderRadius: 2, backgroundColor: Colors.border, marginHorizontal: Spacing.sm },
+
+    actionsRow: { flexDirection: 'row', gap: Spacing.sm, paddingHorizontal: Spacing.md, paddingBottom: Spacing.md, flexWrap: 'wrap' },
+    actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: Spacing.md, paddingVertical: 8, borderRadius: Radius.md, borderWidth: 1 },
+    actionBtnText: { ...Typography.buttonSm },
+
+    durationStrip: {
+        flexDirection: 'row', alignItems: 'center', gap: 6,
+        backgroundColor: Colors.infoLight, padding: Spacing.sm,
+        marginHorizontal: Spacing.md, marginBottom: Spacing.md, borderRadius: Radius.sm,
+    },
+    durationText: { ...Typography.caption, color: Colors.info, fontWeight: '500' },
+
+    empty: { alignItems: 'center', marginTop: 60, gap: Spacing.sm },
+    emptyTitle: { ...Typography.h3, color: Colors.textSecondary },
+    emptyDesc: { ...Typography.body, color: Colors.textTertiary, textAlign: 'center' },
+
+    // Modals
+    modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: Spacing.xl },
+    modalSheet: { backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: Spacing.lg, width: '100%', ...Shadow.lg },
+    modalTitle: { ...Typography.h2, color: Colors.textPrimary, textAlign: 'center' },
+    modalSubtitle: { ...Typography.caption, color: Colors.textTertiary, textAlign: 'center', marginTop: 4, marginBottom: Spacing.md },
+    modalInput: {
+        ...Typography.h1, color: Colors.textPrimary,
+        borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.lg,
+        padding: Spacing.md, textAlign: 'center', backgroundColor: Colors.bg,
+        marginBottom: Spacing.xs,
+    },
+    modalHint: { ...Typography.caption, color: Colors.textTertiary, textAlign: 'center', marginBottom: Spacing.md },
+    modalBtn: { backgroundColor: Colors.primary, borderRadius: Radius.lg, padding: Spacing.md, alignItems: 'center', marginBottom: Spacing.sm },
+    modalBtnText: { ...Typography.button, color: '#fff' },
+    modalCancelBtn: { padding: Spacing.sm, alignItems: 'center' },
+    modalCancelText: { ...Typography.button, color: Colors.textSecondary },
 });

@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { useAuthStore } from '../store/authStore';
 import { getStoredUser } from '../utils/dummyAuth';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 const { height } = Dimensions.get('window');
 
@@ -60,24 +61,26 @@ export default function RootLayout() {
   }
 
   return (
-    <View style={{ flex: 1 }}>
-      {/* App content always renders underneath */}
-      <Slot />
+    <SafeAreaProvider>
+      <View style={{ flex: 1 }}>
+        {/* App content always renders underneath */}
+        <Slot />
 
-      {/* Welcome overlay slides away on every app open */}
-      {showWelcome ? (
-        <Animated.View
-          style={[
-            styles.overlay,
-            { transform: [{ translateY: slideAnim }] }
-          ]}
-        >
-          <StatusBar barStyle="light-content" backgroundColor="#FF6B35" />
-          <Text style={styles.brand}>MOTOBEE</Text>
-          <Text style={styles.tagline}>Your Bike. Our Care.</Text>
-        </Animated.View>
-      ) : null}
-    </View>
+        {/* Welcome overlay slides away on every app open */}
+        {showWelcome ? (
+          <Animated.View
+            style={[
+              styles.overlay,
+              { transform: [{ translateY: slideAnim }] }
+            ]}
+          >
+            <StatusBar barStyle="light-content" backgroundColor="#FF6B35" />
+            <Text style={styles.brand}>MOTOBEE</Text>
+            <Text style={styles.tagline}>Your Bike. Our Care.</Text>
+          </Animated.View>
+        ) : null}
+      </View>
+    </SafeAreaProvider>
   );
 }
 

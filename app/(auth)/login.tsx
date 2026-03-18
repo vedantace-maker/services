@@ -5,7 +5,10 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
-import { loginUser } from '../../utils/dummyAuth';
+import { loginUser } from '../../utils/services/authService';
+import Toast from '../../components/Toast';
+import { useToast } from '../../hooks/useToast';
+
 
 export default function LoginScreen() {
     const [email, setEmail] = useState('');
@@ -13,21 +16,34 @@ export default function LoginScreen() {
     const [loading, setLoading] = useState(false);
     const setUser = useAuthStore((s) => s.setUser);
     const router = useRouter();
+    const { toast, showToast, hideToast } = useToast();
 
     const handleLogin = async () => {
-        if (!email.trim() || !password.trim()) {
-            Alert.alert('Error', 'Please fill in all fields.');
-            return;
-        }
+        if (!email.trim()) { showToast('Please enter your email.', 'warning'); return; }
+        if (!password.trim()) { showToast('Please enter your password.', 'warning'); return; }
+
         setLoading(true);
-        const result = await loginUser(email.trim().toLowerCase(), password);
-        setLoading(false);
-        if (result.success && result.user) {
-            setUser(result.user);
-        } else {
-            Alert.alert('Login Failed', result.message);
+        try {
+            const { user } = await loginUser(email.trim(), password);
+            setUser(user!);
+        } catch (e: any) {
+            // ── Parse every shape Django can return ──────────────────────
+            const msg =
+                e?.response?.data?.detail ??  // "No active account found..."
+                e?.response?.data?.non_field_errors?.[0] ??  // DRF default
+                e?.response?.data?.email?.[0] ??  // field-level
+                e?.response?.data?.password?.[0] ??
+                (e?.response?.status === 401
+                    ? 'Wrong email or password. Please try again.'
+                    : 'Something went wrong. Please try again.');
+
+            showToast(msg, 'error');
+        } finally {
+            setLoading(false);   // ← ALWAYS runs, clears the spinner
         }
     };
+
+
 
     return (
         <View style={styles.container}>
@@ -59,6 +75,8 @@ export default function LoginScreen() {
             <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
                 <Text style={styles.link}>New here? Create an account</Text>
             </TouchableOpacity>
+
+            <Toast visible={toast.visible} message={toast.message} type={toast.type} onHide={hideToast} />
         </View>
     );
 }
@@ -75,4 +93,3 @@ const styles = StyleSheet.create({
     btnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
     link: { textAlign: 'center', color: '#FF6B35', marginTop: 20, fontSize: 15 },
 });
-    

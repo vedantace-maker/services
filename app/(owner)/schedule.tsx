@@ -1,499 +1,502 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
-    View, Text, StyleSheet, TouchableOpacity,
-    Alert, ScrollView, Switch, ActivityIndicator,
-    Modal, FlatList
+    View, Text, StyleSheet, ScrollView,
+    TouchableOpacity, ActivityIndicator, Switch,
 } from 'react-native';
-import { Calendar } from 'react-native-calendars';
-import { getGarageById, updateGarageSchedule } from '../../utils/storage';
-import { generateTimeSlots } from '../../utils/distance';
-import { useAuthStore } from '../../store/authStore';
-import { DaySchedule } from '../../types';
+import { useFocusEffect } from 'expo-router';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { getGarageSchedule, getMyGarage, updateGarageSchedule } from '../../utils/services/garageService';
+import { Weekday, DaySchedule } from '../../types';
+import Toast from '../../components/Toast';
+import { useToast } from '../../hooks/useToast';
+import { Colors, Typography, Spacing, Radius, Shadow } from '../../constants/theme';
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-const to12h = (hour: number): string => {
-    if (hour === 0) return '12:00 AM';
-    if (hour === 12) return '12:00 PM';
-    return hour < 12 ? `${hour}:00 AM` : `${hour - 12}:00 PM`;
-};
-
-const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => ({
-    label: to12h(i),
-    value: i,
-}));
-
-const INTERVAL_OPTIONS = [
-    { label: '15 minutes', value: 15 },
-    { label: '30 minutes', value: 30 },
-    { label: '45 minutes', value: 45 },
-    { label: '60 minutes (1 hr)', value: 60 },
-    { label: '90 minutes (1.5 hr)', value: 90 },
-    { label: '120 minutes (2 hr)', value: 120 },
+// ── Constants ─────────────────────────────────────────────────────────────────
+const WEEKDAYS: Weekday[] = [
+    'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
 ];
 
-// ─── Reusable Dropdown Component ─────────────────────────────────────────────
-interface DropdownOption { label: string; value: number; }
+const DAY_SHORT: Record<Weekday, string> = {
+    Monday: 'Mon', Tuesday: 'Tue', Wednesday: 'Wed',
+    Thursday: 'Thu', Friday: 'Fri', Saturday: 'Sat', Sunday: 'Sun',
+};
 
-interface DropdownProps {
-    label: string;
-    options: DropdownOption[];
-    value: number;
-    onChange: (val: number) => void;
-    accentColor?: string;
-}
+const HOURS = Array.from({ length: 24 }, (_, i) => i);   // 0..23
+const INTERVALS = [30, 60, 90, 120];
 
-function Dropdown({ label, options, value, onChange, accentColor = '#FF6B35' }: DropdownProps) {
-    const [open, setOpen] = useState(false);
-    const selected = options.find((o) => o.value === value);
-
-    return (
-        <View style={dropStyles.container}>
-            <Text style={dropStyles.label}>{label}</Text>
-            <TouchableOpacity
-                style={[dropStyles.selector, { borderColor: open ? accentColor : '#ddd' }]}
-                onPress={() => setOpen(true)}
-                activeOpacity={0.8}
-            >
-                <Text style={dropStyles.selectorText}>{selected?.label ?? '—'}</Text>
-                <Text style={[dropStyles.arrow, { color: accentColor }]}>▾</Text>
-            </TouchableOpacity>
-
-            <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-                <TouchableOpacity
-                    style={dropStyles.backdrop}
-                    activeOpacity={1}
-                    onPress={() => setOpen(false)}
-                >
-                    <View style={dropStyles.sheet}>
-                        <View style={dropStyles.sheetHeader}>
-                            <Text style={dropStyles.sheetTitle}>{label}</Text>
-                            <TouchableOpacity onPress={() => setOpen(false)}>
-                                <Text style={dropStyles.sheetClose}>✕</Text>
-                            </TouchableOpacity>
-                        </View>
-                        <FlatList
-                            data={options}
-                            keyExtractor={(item) => item.value.toString()}
-                            renderItem={({ item }) => (
-                                <TouchableOpacity
-                                    style={[
-                                        dropStyles.option,
-                                        item.value === value && { backgroundColor: accentColor + '15' }
-                                    ]}
-                                    onPress={() => {
-                                        onChange(item.value);
-                                        setOpen(false);
-                                    }}
-                                >
-                                    <Text
-                                        style={[
-                                            dropStyles.optionText,
-                                            item.value === value && { color: accentColor, fontWeight: '700' }
-                                        ]}
-                                    >
-                                        {item.label}
-                                    </Text>
-                                    {item.value === value ? (
-                                        <Text style={[dropStyles.optionCheck, { color: accentColor }]}>✓</Text>
-                                    ) : null}
-                                </TouchableOpacity>
-                            )}
-                        />
-                    </View>
-                </TouchableOpacity>
-            </Modal>
-        </View>
-    );
-}
-
-const dropStyles = StyleSheet.create({
-    container: { marginBottom: 14 },
-    label: { fontSize: 13, fontWeight: '600', color: '#555', marginBottom: 6 },
-    selector: {
-        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-        borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 14,
-        paddingVertical: 12, backgroundColor: '#fff'
-    },
-    selectorText: { fontSize: 15, color: '#222', fontWeight: '500' },
-    arrow: { fontSize: 18, fontWeight: 'bold' },
-    backdrop: {
-        flex: 1, backgroundColor: 'rgba(0,0,0,0.45)',
-        justifyContent: 'flex-end'
-    },
-    sheet: {
-        backgroundColor: '#fff', borderTopLeftRadius: 20,
-        borderTopRightRadius: 20, maxHeight: '55%', paddingBottom: 30
-    },
-    sheetHeader: {
-        flexDirection: 'row', justifyContent: 'space-between',
-        alignItems: 'center', padding: 16,
-        borderBottomWidth: 1, borderBottomColor: '#f0f0f0'
-    },
-    sheetTitle: { fontSize: 16, fontWeight: 'bold', color: '#222' },
-    sheetClose: { fontSize: 18, color: '#aaa', padding: 4 },
-    option: {
-        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-        paddingVertical: 14, paddingHorizontal: 20,
-        borderBottomWidth: 1, borderBottomColor: '#f8f8f8'
-    },
-    optionText: { fontSize: 15, color: '#333' },
-    optionCheck: { fontSize: 16, fontWeight: 'bold' },
+const DEFAULT_DAY = (day: Weekday): DaySchedule => ({
+    day, isOpen: false, startHour: 9, endHour: 18, intervalMinutes: 60,
 });
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
-export default function ManageScheduleScreen() {
-    const user = useAuthStore((s) => s.user);
+function formatHour(h: number) {
+    if (h === 0) return '12:00 AM';
+    if (h < 12) return `${h}:00 AM`;
+    if (h === 12) return '12:00 PM';
+    return `${h - 12}:00 PM`;
+}
 
-    const [selectedDate, setSelectedDate] = useState('');
-    const [isOpen, setIsOpen] = useState(true);
-    const [loading, setLoading] = useState(false);
+// ── Component ─────────────────────────────────────────────────────────────────
+export default function ScheduleScreen() {
+    const { toast, showToast, hideToast } = useToast();
+
+    const [schedule, setSchedule] = useState<Record<Weekday, DaySchedule>>(
+        () => Object.fromEntries(WEEKDAYS.map((d) => [d, DEFAULT_DAY(d)])) as Record<Weekday, DaySchedule>
+    );
+    const [expanded, setExpanded] = useState<Weekday | null>(null);
+    const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [existingDay, setExistingDay] = useState<DaySchedule | null>(null);
 
-    const [startHour, setStartHour] = useState(9);
-    const [endHour, setEndHour] = useState(18);
-    const [intervalMin, setIntervalMin] = useState(60);
+    // ── Add garageId to state ─────────────────────────────────────────
+    const [garageId, setGarageId] = useState<string | null>(null);
 
-    const [editingConfig, setEditingConfig] = useState(false);
-    const [tempStart, setTempStart] = useState(9);
-    const [tempEnd, setTempEnd] = useState(18);
-    const [tempInterval, setTempInterval] = useState(60);
 
-    // ─── Load day ───────────────────────────────────────────────────────────────
-    const loadDay = async (date: string) => {
+    // ── Load existing schedule ─────────────────────────────────────────────────
+    useFocusEffect(useCallback(() => { load(); }, []));
+
+    const load = async () => {
         setLoading(true);
-        const garage = await getGarageById(user!.uid);
-        if (garage) {
-            const day = garage.schedule.find((d) => d.date === date) ?? null;
-            setExistingDay(day);
-            setIsOpen(day ? day.isOpen : true);
-            if (day && day.slots.length > 0) {
-                const times = day.slots.map((s) => {
-                    const [h, m] = s.time.split(':').map(Number);
-                    return h * 60 + m;
+        try {
+            // Step 1 — get garage to extract its id
+            const garage = await getMyGarage();
+            setGarageId(String(garage.id));
+
+            // Step 2 — fetch schedule using that id
+            const scheduleData = await getGarageSchedule(garage.id);
+
+            if (scheduleData?.length) {
+                const map = {
+                    ...Object.fromEntries(WEEKDAYS.map((d) => [d, DEFAULT_DAY(d)])),
+                };
+                scheduleData.forEach((s) => {
+                    if (s.day) map[s.day as Weekday] = s;
                 });
-                const savedStart = Math.floor(Math.min(...times) / 60);
-                const savedEnd = Math.floor(Math.max(...times) / 60) + 1;
-                const savedInterval = times.length > 1 ? times[1] - times[0] : 60;
-                setStartHour(savedStart); setEndHour(savedEnd); setIntervalMin(savedInterval);
-                setTempStart(savedStart); setTempEnd(savedEnd); setTempInterval(savedInterval);
-            } else {
-                setStartHour(9); setEndHour(18); setIntervalMin(60);
-                setTempStart(9); setTempEnd(18); setTempInterval(60);
+                setSchedule(map as Record<Weekday, DaySchedule>);
+            }
+        } catch (e: any) {
+            showToast(e?.response?.data?.detail ?? 'Failed to load schedule.', 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+    const update = (day: Weekday, patch: Partial<DaySchedule>) =>
+        setSchedule((prev) => ({ ...prev, [day]: { ...prev[day], ...patch } }));
+
+    const toggleDay = (day: Weekday, value: boolean) => {
+        update(day, { isOpen: value });
+        // Auto-expand when turned on
+        if (value) setExpanded(day);
+    };
+
+    const countSlots = (s: DaySchedule): number => {
+        if (!s.isOpen) return 0;
+        const totalMins = (s.endHour - s.startHour) * 60;
+        return Math.max(0, Math.floor(totalMins / s.intervalMinutes));
+    };
+
+    // ── Quick presets ──────────────────────────────────────────────────────────
+    const applyPreset = (preset: 'weekdays' | 'everyday' | 'clear') => {
+        setSchedule((prev) => {
+            const next = { ...prev };
+            WEEKDAYS.forEach((d) => {
+                if (preset === 'clear') {
+                    next[d] = { ...next[d], isOpen: false };
+                } else if (preset === 'weekdays') {
+                    next[d] = { ...next[d], isOpen: d !== 'Saturday' && d !== 'Sunday' };
+                } else {
+                    next[d] = { ...next[d], isOpen: true };
+                }
+            });
+            return next;
+        });
+    };
+
+    // ── Save ───────────────────────────────────────────────────────────────────
+    // ── Replace handleSave() ──────────────────────────────────────────
+    const handleSave = async () => {
+        if (!garageId) {
+            showToast('Garage not found. Please try again.', 'error');
+            return;
+        }
+
+        // Validate open days
+        for (const day of WEEKDAYS) {
+            const s = schedule[day];
+            if (s.isOpen && s.endHour <= s.startHour) {
+                showToast(`${day}: closing time must be after opening time.`, 'warning');
+                return;
             }
         }
-        setEditingConfig(false);
-        setLoading(false);
-    };
 
-    // ─── Apply config ───────────────────────────────────────────────────────────
-    const applyConfig = () => {
-        if (tempStart >= tempEnd) {
-            Alert.alert('Invalid Hours', 'Opening time must be before closing time.');
-            return;
-        }
-        if ((tempEnd - tempStart) * 60 < tempInterval) {
-            Alert.alert('Invalid Slots', 'Slot duration is longer than total working hours.');
-            return;
-        }
-        setStartHour(tempStart);
-        setEndHour(tempEnd);
-        setIntervalMin(tempInterval);
-        setEditingConfig(false);
-    };
-
-    // ─── Save schedule ──────────────────────────────────────────────────────────
-    const saveSchedule = async () => {
-        if (!selectedDate) { Alert.alert('Select a date first'); return; }
-        if (startHour >= endHour) {
-            Alert.alert('Invalid Hours', 'Opening time must be before closing time.');
-            return;
-        }
         setSaving(true);
         try {
-            const garage = await getGarageById(user!.uid);
-            if (!garage) { Alert.alert('Error', 'Garage not found.'); return; }
-
-            const current = [...garage.schedule];
-            const idx = current.findIndex((d) => d.date === selectedDate);
-            const newDay: DaySchedule = {
-                date: selectedDate,
-                isOpen,
-                slots: isOpen ? generateTimeSlots(startHour, endHour, intervalMin) : [],
-            };
-            if (idx >= 0) current[idx] = newDay;
-            else current.push(newDay);
-
-            await updateGarageSchedule(user!.uid, current);
-            setExistingDay(newDay);
-            Alert.alert('✅ Saved', `Schedule for ${selectedDate} updated.`);
+            await updateGarageSchedule(garageId, Object.values(schedule));
+            showToast('Schedule saved successfully.', 'success');
         } catch (e: any) {
-            Alert.alert('Error', e.message);
+            showToast(e?.response?.data?.detail ?? 'Failed to save schedule.', 'error');
         } finally {
             setSaving(false);
         }
     };
 
-    const slotCount = isOpen
-        ? generateTimeSlots(startHour, endHour, intervalMin).length
-        : 0;
+
+    // ── Open days summary ──────────────────────────────────────────────────────
+    const openDays = WEEKDAYS.filter((d) => schedule[d].isOpen);
+    const closedDays = WEEKDAYS.filter((d) => !schedule[d].isOpen);
+
+    if (loading) return <ActivityIndicator style={{ flex: 1 }} color={Colors.primary} />;
 
     return (
-        <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
-            <Text style={styles.title}>Manage Your Schedule</Text>
+        <View style={{ flex: 1 }}>
+            <ScrollView style={styles.container} contentContainerStyle={styles.content}>
 
-            {/* Calendar */}
-            <Calendar
-                minDate={new Date().toISOString().split('T')[0]}
-                onDayPress={(day: any) => {
-                    setSelectedDate(day.dateString);
-                    loadDay(day.dateString);
-                }}
-                markedDates={{ [selectedDate]: { selected: true, selectedColor: '#FF6B35' } }}
-            />
+                {/* ── Header ──────────────────────────────────────────────────────── */}
+                <View style={styles.header}>
+                    <View>
+                        <Text style={styles.headerTitle}>Weekly Schedule</Text>
+                        <Text style={styles.headerSub}>
+                            {openDays.length} day{openDays.length !== 1 ? 's' : ''} open each week
+                        </Text>
+                    </View>
+                    <View style={styles.summaryPill}>
+                        <Ionicons name="calendar-outline" size={14} color={Colors.primary} />
+                        <Text style={styles.summaryPillText}>{openDays.length}/7</Text>
+                    </View>
+                </View>
 
-            {selectedDate ? (
-                loading ? (
-                    <ActivityIndicator color="#FF6B35" style={{ marginTop: 24 }} />
-                ) : (
-                    <>
-                        {/* Open / Closed toggle */}
-                        <View style={styles.card}>
-                            <Text style={styles.dateLabel}>📅 {selectedDate}</Text>
-                            <View style={styles.switchRow}>
-                                <View>
-                                    <Text style={styles.switchTitle}>Open for Bookings</Text>
-                                    <Text style={styles.switchSub}>
-                                        {isOpen ? 'Customers can book slots' : 'Garage closed this day'}
-                                    </Text>
-                                </View>
-                                <Switch
-                                    value={isOpen}
-                                    onValueChange={setIsOpen}
-                                    thumbColor={isOpen ? '#FF6B35' : '#ccc'}
-                                    trackColor={{ true: '#FFCBB4', false: '#eee' }}
-                                />
-                            </View>
-                        </View>
-
-                        {/* Working Hours & Slots Card */}
-                        {isOpen ? (
-                            <View style={styles.card}>
-                                <View style={styles.configHeader}>
-                                    <Text style={styles.cardTitle}>⚙️ Working Hours & Slots</Text>
-                                    {!editingConfig ? (
-                                        <TouchableOpacity
-                                            style={styles.editConfigBtn}
-                                            onPress={() => {
-                                                setTempStart(startHour);
-                                                setTempEnd(endHour);
-                                                setTempInterval(intervalMin);
-                                                setEditingConfig(true);
-                                            }}
-                                        >
-                                            <Text style={styles.editConfigBtnText}>✏️ Edit</Text>
-                                        </TouchableOpacity>
-                                    ) : null}
-                                </View>
-
-                                {/* ── VIEW MODE ─────────────────────────────────────────── */}
-                                {!editingConfig ? (
-                                    <>
-                                        <View style={styles.configRow}>
-                                            <View style={styles.configBox}>
-                                                <Text style={styles.configBoxLabel}>Opens At</Text>
-                                                <Text style={styles.configBoxValue}>{to12h(startHour)}</Text>
-                                            </View>
-                                            <Text style={styles.configArrow}>→</Text>
-                                            <View style={styles.configBox}>
-                                                <Text style={styles.configBoxLabel}>Closes At</Text>
-                                                <Text style={styles.configBoxValue}>{to12h(endHour)}</Text>
-                                            </View>
-                                        </View>
-
-                                        <View style={styles.divider} />
-
-                                        <View style={styles.configRow}>
-                                            <View style={styles.configBox}>
-                                                <Text style={styles.configBoxLabel}>Per Slot</Text>
-                                                <Text style={styles.configBoxValue}>{intervalMin} min</Text>
-                                            </View>
-                                            <Text style={styles.configArrow}>=</Text>
-                                            <View style={styles.configBox}>
-                                                <Text style={styles.configBoxLabel}>Total Slots</Text>
-                                                <Text style={[styles.configBoxValue, { color: '#FF6B35' }]}>
-                                                    {slotCount} slots
-                                                </Text>
-                                            </View>
-                                        </View>
-
-                                        {/* Slot preview */}
-                                        <View style={styles.slotPreviewBox}>
-                                            <Text style={styles.slotPreviewLabel}>Slot Preview</Text>
-                                            <View style={styles.slotPreviewChips}>
-                                                {generateTimeSlots(startHour, endHour, intervalMin)
-                                                    .slice(0, 6)
-                                                    .map((s) => (
-                                                        <View key={s.id} style={styles.previewChip}>
-                                                            <Text style={styles.previewChipText}>{s.time}</Text>
-                                                        </View>
-                                                    ))}
-                                                {slotCount > 6 ? (
-                                                    <View style={styles.previewChipMore}>
-                                                        <Text style={styles.previewChipMoreText}>+{slotCount - 6} more</Text>
-                                                    </View>
-                                                ) : null}
-                                            </View>
-                                        </View>
-                                    </>
-                                ) : (
-                                    /* ── EDIT MODE ──────────────────────────────────────── */
-                                    <>
-                                        <Dropdown
-                                            label="🕐 Opening Time"
-                                            options={HOUR_OPTIONS.slice(0, 23)}
-                                            value={tempStart}
-                                            onChange={setTempStart}
-                                        />
-
-                                        <Dropdown
-                                            label="🕐 Closing Time"
-                                            options={HOUR_OPTIONS.slice(1)}
-                                            value={tempEnd}
-                                            onChange={setTempEnd}
-                                        />
-
-                                        <Dropdown
-                                            label="⏱️ Time Per Slot"
-                                            options={INTERVAL_OPTIONS}
-                                            value={tempInterval}
-                                            onChange={setTempInterval}
-                                        />
-
-                                        {/* Live preview */}
-                                        {tempStart < tempEnd ? (
-                                            <View style={styles.livePreview}>
-                                                <Text style={styles.livePreviewText}>
-                                                    {to12h(tempStart)} → {to12h(tempEnd)}  •  {tempInterval} min/slot  •  {' '}
-                                                    <Text style={{ color: '#FF6B35', fontWeight: 'bold' }}>
-                                                        {generateTimeSlots(tempStart, tempEnd, tempInterval).length} total slots
-                                                    </Text>
-                                                </Text>
-                                            </View>
-                                        ) : null}
-
-                                        <View style={styles.configBtnRow}>
-                                            <TouchableOpacity
-                                                style={styles.configCancelBtn}
-                                                onPress={() => setEditingConfig(false)}
-                                            >
-                                                <Text style={styles.configCancelText}>Cancel</Text>
-                                            </TouchableOpacity>
-                                            <TouchableOpacity
-                                                style={styles.configApplyBtn}
-                                                onPress={applyConfig}
-                                            >
-                                                <Text style={styles.configApplyText}>Apply Changes</Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                    </>
-                                )}
-                            </View>
-                        ) : null}
-
-                        {/* Save Button */}
+                {/* ── Quick presets ────────────────────────────────────────────────── */}
+                <View style={styles.presetsRow}>
+                    <Text style={styles.presetsLabel}>Quick Set:</Text>
+                    {[
+                        { key: 'weekdays', label: 'Mon–Fri' },
+                        { key: 'everyday', label: 'Every Day' },
+                        { key: 'clear', label: 'All Closed' },
+                    ].map((p) => (
                         <TouchableOpacity
-                            style={styles.saveBtn}
-                            onPress={saveSchedule}
-                            disabled={saving}
+                            key={p.key}
+                            style={styles.presetBtn}
+                            onPress={() => applyPreset(p.key as any)}
                         >
-                            {saving
-                                ? <ActivityIndicator color="#fff" />
-                                : <Text style={styles.saveBtnText}>Save Schedule for {selectedDate}</Text>
-                            }
+                            <Text style={styles.presetBtnText}>{p.label}</Text>
                         </TouchableOpacity>
-                    </>
-                )
-            ) : (
-                <Text style={styles.hint}>Select a date above to configure your availability.</Text>
-            )}
-        </ScrollView>
+                    ))}
+                </View>
+
+                {/* ── Week overview strip ──────────────────────────────────────────── */}
+                <View style={styles.weekStrip}>
+                    {WEEKDAYS.map((day) => {
+                        const isOpen = schedule[day].isOpen;
+                        return (
+                            <TouchableOpacity
+                                key={day}
+                                style={[styles.dayChip, isOpen ? styles.dayChipOpen : styles.dayChipClosed]}
+                                onPress={() => toggleDay(day, !isOpen)}
+                            >
+                                <Text style={[styles.dayChipText, isOpen ? styles.dayChipTextOpen : styles.dayChipTextClosed]}>
+                                    {DAY_SHORT[day]}
+                                </Text>
+                                <View style={[styles.dayChipDot, { backgroundColor: isOpen ? Colors.success : Colors.borderLight }]} />
+                            </TouchableOpacity>
+                        );
+                    })}
+                </View>
+
+                {/* ── Day cards ────────────────────────────────────────────────────── */}
+                {WEEKDAYS.map((day) => {
+                    const s = schedule[day];
+                    const isExpanded = expanded === day;
+                    const slots = countSlots(s);
+                    const isWeekend = day === 'Saturday' || day === 'Sunday';
+
+                    return (
+                        <View
+                            key={day}
+                            style={[styles.dayCard, !s.isOpen && styles.dayCardClosed]}
+                        >
+                            {/* ── Row 1: toggle + name + expand ─────────────────────────── */}
+                            <TouchableOpacity
+                                style={styles.dayCardHeader}
+                                onPress={() => s.isOpen && setExpanded(isExpanded ? null : day)}
+                                activeOpacity={s.isOpen ? 0.7 : 1}
+                            >
+                                <Switch
+                                    value={s.isOpen}
+                                    onValueChange={(v) => toggleDay(day, v)}
+                                    trackColor={{ false: Colors.borderLight, true: Colors.primary + '60' }}
+                                    thumbColor={s.isOpen ? Colors.primary : Colors.textTertiary}
+                                />
+
+                                <View style={styles.dayCardNameWrap}>
+                                    <Text style={[styles.dayCardName, !s.isOpen && styles.dayCardNameClosed]}>
+                                        {day}
+                                    </Text>
+                                    {isWeekend && (
+                                        <View style={styles.weekendBadge}>
+                                            <Text style={styles.weekendBadgeText}>Weekend</Text>
+                                        </View>
+                                    )}
+                                </View>
+
+                                {s.isOpen ? (
+                                    <View style={styles.dayCardMeta}>
+                                        <Text style={styles.dayCardMetaText}>
+                                            {formatHour(s.startHour)} – {formatHour(s.endHour)}
+                                        </Text>
+                                        <Text style={styles.dayCardSlotCount}>{slots} slots</Text>
+                                    </View>
+                                ) : (
+                                    <Text style={styles.dayCardClosed_label}>Closed</Text>
+                                )}
+
+                                {s.isOpen && (
+                                    <Ionicons
+                                        name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                                        size={16}
+                                        color={Colors.textTertiary}
+                                    />
+                                )}
+                            </TouchableOpacity>
+
+                            {/* ── Row 2: time + interval pickers (expanded) ─────────────── */}
+                            {s.isOpen && isExpanded && (
+                                <View style={styles.dayCardBody}>
+                                    <View style={styles.divider} />
+
+                                    {/* Opening time */}
+                                    <View style={styles.pickerSection}>
+                                        <Text style={styles.pickerLabel}>
+                                            <Ionicons name="sunny-outline" size={13} color={Colors.warning} /> Opening Time
+                                        </Text>
+                                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pickerScroll}>
+                                            {HOURS.slice(4, 14).map((h) => (
+                                                <TouchableOpacity
+                                                    key={h}
+                                                    style={[styles.timeChip, s.startHour === h && styles.timeChipActive]}
+                                                    onPress={() => update(day, { startHour: h })}
+                                                >
+                                                    <Text style={[styles.timeChipText, s.startHour === h && styles.timeChipTextActive]}>
+                                                        {formatHour(h)}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </ScrollView>
+                                    </View>
+
+                                    {/* Closing time */}
+                                    <View style={styles.pickerSection}>
+                                        <Text style={styles.pickerLabel}>
+                                            <Ionicons name="moon-outline" size={13} color={Colors.info} /> Closing Time
+                                        </Text>
+                                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pickerScroll}>
+                                            {HOURS.slice(10, 24).map((h) => (
+                                                <TouchableOpacity
+                                                    key={h}
+                                                    style={[
+                                                        styles.timeChip,
+                                                        s.endHour === h && styles.timeChipActive,
+                                                        h <= s.startHour && styles.timeChipDisabled,
+                                                    ]}
+                                                    onPress={() => h > s.startHour && update(day, { endHour: h })}
+                                                >
+                                                    <Text style={[
+                                                        styles.timeChipText,
+                                                        s.endHour === h && styles.timeChipTextActive,
+                                                        h <= s.startHour && styles.timeChipTextDisabled,
+                                                    ]}>
+                                                        {formatHour(h)}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </ScrollView>
+                                    </View>
+
+                                    {/* Slot interval */}
+                                    <View style={styles.pickerSection}>
+                                        <Text style={styles.pickerLabel}>
+                                            <Ionicons name="time-outline" size={13} color={Colors.success} /> Slot Interval
+                                        </Text>
+                                        <View style={styles.intervalRow}>
+                                            {INTERVALS.map((mins) => (
+                                                <TouchableOpacity
+                                                    key={mins}
+                                                    style={[styles.intervalChip, s.intervalMinutes === mins && styles.intervalChipActive]}
+                                                    onPress={() => update(day, { intervalMinutes: mins })}
+                                                >
+                                                    <Text style={[styles.intervalChipText, s.intervalMinutes === mins && styles.intervalChipTextActive]}>
+                                                        {mins} min
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    </View>
+
+                                    {/* Slots preview */}
+                                    <View style={styles.slotsPreview}>
+                                        <Ionicons name="grid-outline" size={14} color={Colors.primary} />
+                                        <Text style={styles.slotsPreviewText}>
+                                            {slots} slots · {formatHour(s.startHour)} to {formatHour(s.endHour)} every {s.intervalMinutes} min
+                                        </Text>
+                                    </View>
+                                </View>
+                            )}
+                        </View>
+                    );
+                })}
+
+                {/* ── Closed days note ─────────────────────────────────────────────── */}
+                {closedDays.length > 0 && (
+                    <View style={styles.closedNote}>
+                        <Ionicons name="information-circle-outline" size={15} color={Colors.textTertiary} />
+                        <Text style={styles.closedNoteText}>
+                            Customers cannot book on:{' '}
+                            <Text style={{ fontWeight: '700' }}>
+                                {closedDays.map((d) => DAY_SHORT[d]).join(', ')}
+                            </Text>
+                        </Text>
+                    </View>
+                )}
+
+            </ScrollView>
+
+            {/* ── Save button ────────────────────────────────────────────────────── */}
+            <View style={styles.footer}>
+                <TouchableOpacity
+                    style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
+                    onPress={handleSave}
+                    disabled={saving}
+                    activeOpacity={0.88}
+                >
+                    {saving ? (
+                        <ActivityIndicator color="#fff" />
+                    ) : (
+                        <>
+                            <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
+                            <Text style={styles.saveBtnText}>Save Weekly Schedule</Text>
+                        </>
+                    )}
+                </TouchableOpacity>
+            </View>
+
+            <Toast visible={toast.visible} message={toast.message} type={toast.type} onHide={hideToast} />
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f5f5f5', padding: 16 },
-    title: { fontSize: 22, fontWeight: 'bold', color: '#333', marginBottom: 16 },
+    container: { flex: 1, backgroundColor: Colors.bg },
+    content: { padding: Spacing.md, gap: Spacing.sm, paddingBottom: 100 },
 
-    card: {
-        backgroundColor: '#fff', borderRadius: 16,
-        padding: 16, marginTop: 16, elevation: 2
+    header: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+        backgroundColor: Colors.surface, padding: Spacing.md,
+        borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border, ...Shadow.sm,
     },
-    dateLabel: { fontSize: 15, fontWeight: '600', color: '#FF6B35', marginBottom: 14 },
+    headerTitle: { ...Typography.h2, color: Colors.textPrimary },
+    headerSub: { ...Typography.caption, color: Colors.textTertiary, marginTop: 4 },
+    summaryPill: {
+        flexDirection: 'row', alignItems: 'center', gap: 4,
+        backgroundColor: Colors.primaryLight, paddingHorizontal: Spacing.sm,
+        paddingVertical: 6, borderRadius: Radius.full,
+    },
+    summaryPillText: { ...Typography.caption, color: Colors.primary, fontWeight: '700' },
 
-    switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    switchTitle: { fontSize: 15, fontWeight: '600', color: '#222' },
-    switchSub: { fontSize: 12, color: '#aaa', marginTop: 2 },
+    presetsRow: {
+        flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, flexWrap: 'wrap',
+    },
+    presetsLabel: { ...Typography.caption, color: Colors.textTertiary },
+    presetBtn: {
+        paddingHorizontal: Spacing.md, paddingVertical: 7,
+        backgroundColor: Colors.surface, borderRadius: Radius.full,
+        borderWidth: 1, borderColor: Colors.border,
+    },
+    presetBtnText: { ...Typography.caption, color: Colors.textSecondary, fontWeight: '600' },
 
-    configHeader: {
-        flexDirection: 'row', justifyContent: 'space-between',
-        alignItems: 'center', marginBottom: 16
+    weekStrip: {
+        flexDirection: 'row', gap: Spacing.xs,
+        backgroundColor: Colors.surface, padding: Spacing.sm,
+        borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border,
+        justifyContent: 'space-between',
     },
-    cardTitle: { fontSize: 15, fontWeight: 'bold', color: '#222' },
-    editConfigBtn: {
-        backgroundColor: '#FFF3EF', paddingHorizontal: 12,
-        paddingVertical: 6, borderRadius: 20,
-        borderWidth: 1, borderColor: '#FF6B35'
-    },
-    editConfigBtnText: { color: '#FF6B35', fontWeight: '600', fontSize: 13 },
+    dayChip: { flex: 1, alignItems: 'center', paddingVertical: Spacing.sm, borderRadius: Radius.md, gap: 4 },
+    dayChipOpen: { backgroundColor: Colors.primaryLight },
+    dayChipClosed: { backgroundColor: Colors.surfaceAlt },
+    dayChipText: { fontSize: 10, fontWeight: '700' },
+    dayChipTextOpen: { color: Colors.primary },
+    dayChipTextClosed: { color: Colors.textTertiary },
+    dayChipDot: { width: 5, height: 5, borderRadius: 3 },
 
-    configRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' },
-    configBox: { alignItems: 'center', flex: 1 },
-    configBoxLabel: { fontSize: 11, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.5 },
-    configBoxValue: { fontSize: 18, fontWeight: 'bold', color: '#222', marginTop: 4 },
-    configArrow: { fontSize: 20, color: '#ccc' },
-    divider: { height: 1, backgroundColor: '#f0f0f0', marginVertical: 14 },
+    dayCard: {
+        backgroundColor: Colors.surface, borderRadius: Radius.lg,
+        borderWidth: 1, borderColor: Colors.border, overflow: 'hidden', ...Shadow.sm,
+    },
+    dayCardClosed: { opacity: 0.65 },
+    dayCardHeader: {
+        flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+        padding: Spacing.md,
+    },
+    dayCardNameWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
+    dayCardName: { ...Typography.h3, color: Colors.textPrimary },
+    dayCardNameClosed: { color: Colors.textTertiary },
+    weekendBadge: {
+        backgroundColor: Colors.warningLight, paddingHorizontal: 7, paddingVertical: 2,
+        borderRadius: Radius.full,
+    },
+    weekendBadgeText: { fontSize: 9, fontWeight: '700', color: '#92400E' },
+    dayCardMeta: { alignItems: 'flex-end', gap: 2 },
+    dayCardMetaText: { ...Typography.caption, color: Colors.textSecondary, fontWeight: '600' },
+    dayCardSlotCount: { fontSize: 10, color: Colors.primary, fontWeight: '700' },
+    dayCardClosed_label: { ...Typography.caption, color: Colors.textTertiary, fontStyle: 'italic' },
 
-    slotPreviewBox: { marginTop: 14, backgroundColor: '#f9f9f9', borderRadius: 10, padding: 12 },
-    slotPreviewLabel: {
-        fontSize: 12, color: '#aaa', marginBottom: 8,
-        textTransform: 'uppercase', letterSpacing: 0.5
-    },
-    slotPreviewChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-    previewChip: {
-        backgroundColor: '#FFF3EF', borderWidth: 1,
-        borderColor: '#FFCBB4', paddingHorizontal: 10,
-        paddingVertical: 4, borderRadius: 20
-    },
-    previewChipText: { color: '#FF6B35', fontSize: 12, fontWeight: '600' },
-    previewChipMore: {
-        backgroundColor: '#f0f0f0', paddingHorizontal: 10,
-        paddingVertical: 4, borderRadius: 20
-    },
-    previewChipMoreText: { color: '#888', fontSize: 12 },
+    dayCardBody: { paddingHorizontal: Spacing.md, paddingBottom: Spacing.md, gap: Spacing.md },
+    divider: { height: 1, backgroundColor: Colors.borderLight },
 
-    livePreview: {
-        backgroundColor: '#FFF3EF', borderRadius: 10,
-        padding: 12, marginTop: 4, marginBottom: 12
-    },
-    livePreviewText: { color: '#555', fontSize: 13, textAlign: 'center' },
+    pickerSection: { gap: Spacing.xs },
+    pickerLabel: { ...Typography.caption, color: Colors.textSecondary, fontWeight: '600' },
+    pickerScroll: { flexGrow: 0 },
 
-    configBtnRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
-    configCancelBtn: {
-        flex: 1, borderWidth: 1, borderColor: '#ddd',
-        padding: 12, borderRadius: 10, alignItems: 'center'
+    timeChip: {
+        paddingHorizontal: Spacing.md, paddingVertical: 8,
+        backgroundColor: Colors.surfaceAlt, borderRadius: Radius.md,
+        marginRight: Spacing.xs, borderWidth: 1, borderColor: Colors.border,
     },
-    configCancelText: { color: '#888', fontWeight: '600' },
-    configApplyBtn: {
-        flex: 1, backgroundColor: '#FF6B35',
-        padding: 12, borderRadius: 10, alignItems: 'center'
-    },
-    configApplyText: { color: '#fff', fontWeight: 'bold' },
+    timeChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+    timeChipDisabled: { opacity: 0.35 },
+    timeChipText: { ...Typography.caption, color: Colors.textSecondary, fontWeight: '600' },
+    timeChipTextActive: { color: '#fff' },
+    timeChipTextDisabled: { color: Colors.textTertiary },
 
+    intervalRow: { flexDirection: 'row', gap: Spacing.sm },
+    intervalChip: {
+        flex: 1, alignItems: 'center', paddingVertical: Spacing.sm,
+        backgroundColor: Colors.surfaceAlt, borderRadius: Radius.md,
+        borderWidth: 1, borderColor: Colors.border,
+    },
+    intervalChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+    intervalChipText: { ...Typography.caption, color: Colors.textSecondary, fontWeight: '600' },
+    intervalChipTextActive: { color: '#fff' },
+
+    slotsPreview: {
+        flexDirection: 'row', alignItems: 'center', gap: Spacing.xs,
+        backgroundColor: Colors.primaryLight, padding: Spacing.sm, borderRadius: Radius.sm,
+    },
+    slotsPreviewText: { ...Typography.caption, color: Colors.primary, fontWeight: '600' },
+
+    closedNote: {
+        flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.xs,
+        backgroundColor: Colors.surfaceAlt, padding: Spacing.md,
+        borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border,
+    },
+    closedNoteText: { ...Typography.caption, color: Colors.textSecondary, flex: 1, lineHeight: 18 },
+
+    footer: {
+        padding: Spacing.md, backgroundColor: Colors.surface,
+        borderTopWidth: 1, borderTopColor: Colors.borderLight,
+    },
     saveBtn: {
-        backgroundColor: '#FF6B35', padding: 16,
-        borderRadius: 14, alignItems: 'center', marginTop: 20
+        backgroundColor: Colors.primary, borderRadius: Radius.lg, padding: Spacing.md,
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm,
     },
-    saveBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
-    hint: { textAlign: 'center', color: '#aaa', marginTop: 32, fontSize: 14 },
+    saveBtnDisabled: { backgroundColor: Colors.primary + '80' },
+    saveBtnText: { ...Typography.button, color: '#fff' },
 });

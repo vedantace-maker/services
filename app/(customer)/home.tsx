@@ -1,105 +1,87 @@
-import * as Location from 'expo-location';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
-    ActivityIndicator,
-    Dimensions,
-    FlatList, Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+    View, Text, StyleSheet, ScrollView, TouchableOpacity,
+    TextInput, Dimensions, FlatList, ActivityIndicator, Modal
 } from 'react-native';
+import { useRouter } from 'expo-router';
+import * as Location from 'expo-location';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuthStore } from '../../store/authStore';
+import { Colors, Typography, Spacing, Radius, Shadow } from '../../constants/theme';
 
 const { width } = Dimensions.get('window');
 
 type VehicleType = 'bike' | 'scooty';
 
-// ─── Offer Slides ─────────────────────────────────────────────────────────────
 const OFFER_SLIDES = [
-    { id: '1', title: '20% Off Full Service', desc: 'Valid on all bike servicing this month', bg: '#FF6B35', icon: '🔧', tag: 'LIMITED OFFER' },
-    { id: '2', title: 'Free Oil Check', desc: 'Get a free oil inspection with every booking', bg: '#2563EB', icon: '🛢️', tag: 'FREE SERVICE' },
-    { id: '3', title: 'Tyre Checkup ₹99', desc: 'Full tyre inspection & nitrogen fill', bg: '#7C3AED', icon: '⚙️', tag: 'BEST VALUE' },
-    { id: '4', title: 'Battery Replacement', desc: '1 year warranty on all battery installs', bg: '#059669', icon: '🔋', tag: 'WARRANTY' },
+    { id: '1', label: 'LIMITED OFFER', title: '20% Off\nFull Service', desc: 'Valid on all servicing this month', bg: Colors.primary },
+    { id: '2', label: 'FREE SERVICE', title: 'Free\nOil Check', desc: 'With every booking this week', bg: '#1D4ED8' },
+    { id: '3', label: 'BEST VALUE', title: 'Tyre Checkup\n₹99', desc: 'Full inspection & nitrogen fill', bg: '#6D28D9' },
+    { id: '4', label: 'WARRANTY', title: 'Battery\nReplacement', desc: '1 year warranty on all installs', bg: '#065F46' },
 ];
 
-// ─── Curated Services ─────────────────────────────────────────────────────────
-const CURATED_SERVICES = [
-    { id: '1', label: 'Batteries', icon: '🔋', color: '#059669', bg: '#ECFDF5' },
-    { id: '2', label: 'Brakes', icon: '🛑', color: '#DC2626', bg: '#FEF2F2' },
-    { id: '3', label: 'Lights', icon: '💡', color: '#D97706', bg: '#FFFBEB' },
-    { id: '4', label: 'Clutch', icon: '⚙️', color: '#7C3AED', bg: '#F5F3FF' },
-    { id: '5', label: 'Tyres', icon: '🔵', color: '#2563EB', bg: '#EFF6FF' },
-    { id: '6', label: 'Spare Parts', icon: '🔩', color: '#FF6B35', bg: '#FFF7ED' },
+const QUICK_SERVICES = [
+    { id: '1', label: 'Battery', icon: 'battery-charging-outline' as const, color: Colors.success, bg: Colors.successLight },
+    { id: '2', label: 'Brakes', icon: 'disc-outline' as const, color: Colors.error, bg: Colors.errorLight },
+    { id: '3', label: 'Lights', icon: 'bulb-outline' as const, color: Colors.warning, bg: Colors.warningLight },
+    { id: '4', label: 'Clutch', icon: 'settings-outline' as const, color: '#6D28D9', bg: '#F5F3FF' },
+    { id: '5', label: 'Tyres', icon: 'radio-button-on-outline' as const, color: Colors.info, bg: Colors.infoLight },
+    { id: '6', label: 'Spare Parts', icon: 'construct-outline' as const, color: Colors.primary, bg: Colors.primaryLight },
 ];
 
-// ─── All searchable services ──────────────────────────────────────────────────
 const ALL_SERVICES = [
-    'Oil Change', 'Full Service', 'Tyre Puncture Fix', 'Chain & Sprocket Service',
+    'Oil Change', 'Full Service', 'Tyre Puncture Fix', 'Chain & Sprocket',
     'Brake Adjustment', 'Air Filter Clean', 'Battery Check', 'Battery Replacement',
     'Clutch Repair', 'Gear Adjustment', 'Engine Tune-up', 'Belt Change',
-    'CVT Service', 'Body Work', 'Headlight Fix', 'Lights Repair',
-    'Wheel Alignment', 'Suspension Check', 'Coolant Flush', 'Spark Plug',
-    'Washing', 'Foam Wash', 'Spare Parts', 'Nitrogen Fill',
+    'CVT Service', 'Body Work', 'Headlight Fix', 'Wheel Alignment',
+    'Suspension Check', 'Spark Plug', 'Foam Wash', 'Nitrogen Fill',
 ];
 
 // ─── Vehicle Dropdown ─────────────────────────────────────────────────────────
-interface VehicleDropdownProps {
+function VehicleDropdown({
+    value,
+    onChange,
+}: {
     value: VehicleType;
     onChange: (v: VehicleType) => void;
-}
-
-function VehicleDropdown({ value, onChange }: VehicleDropdownProps) {
+}) {
     const [open, setOpen] = useState(false);
-
-    const OPTIONS: { value: VehicleType; label: string; icon: string }[] = [
-        { value: 'bike', label: 'Bike', icon: '🏍️' },
-        { value: 'scooty', label: 'Scooty', icon: '🛵' },
+    const OPTIONS = [
+        { value: 'bike' as VehicleType, label: 'Bike', icon: 'bicycle-outline' as const },
+        { value: 'scooty' as VehicleType, label: 'Scooty', icon: 'speedometer-outline' as const },
     ];
-
     const selected = OPTIONS.find((o) => o.value === value)!;
 
     return (
         <>
-            <TouchableOpacity
-                style={vdStyles.trigger}
-                onPress={() => setOpen(true)}
-                activeOpacity={0.85}
-            >
-                <Text style={vdStyles.triggerIcon}>{selected.icon}</Text>
-                <Text style={vdStyles.triggerLabel}>{selected.label}</Text>
-                <Text style={vdStyles.triggerArrow}>▾</Text>
+            <TouchableOpacity style={vStyles.trigger} onPress={() => setOpen(true)}>
+                <Ionicons name={selected.icon} size={16} color={Colors.primary} />
+                <Text style={vStyles.triggerLabel}>{selected.label}</Text>
+                <Ionicons name="chevron-down" size={14} color={Colors.primary} />
             </TouchableOpacity>
 
             <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-                <TouchableOpacity
-                    style={vdStyles.backdrop}
-                    activeOpacity={1}
-                    onPress={() => setOpen(false)}
-                >
-                    <View style={vdStyles.sheet}>
-                        <Text style={vdStyles.sheetTitle}>Select Vehicle</Text>
+                <TouchableOpacity style={vStyles.backdrop} activeOpacity={1} onPress={() => setOpen(false)}>
+                    <View style={vStyles.sheet}>
+                        <Text style={vStyles.sheetTitle}>Select Vehicle Type</Text>
                         {OPTIONS.map((opt) => (
                             <TouchableOpacity
                                 key={opt.value}
-                                style={[
-                                    vdStyles.option,
-                                    value === opt.value && vdStyles.optionActive,
-                                ]}
+                                style={[vStyles.option, value === opt.value && vStyles.optionActive]}
                                 onPress={() => { onChange(opt.value); setOpen(false); }}
                             >
-                                <Text style={vdStyles.optionIcon}>{opt.icon}</Text>
-                                <Text style={[
-                                    vdStyles.optionLabel,
-                                    value === opt.value && vdStyles.optionLabelActive,
-                                ]}>
+                                <View style={[vStyles.optionIcon, value === opt.value && vStyles.optionIconActive]}>
+                                    <Ionicons
+                                        name={opt.icon}
+                                        size={20}
+                                        color={value === opt.value ? Colors.primary : Colors.textSecondary}
+                                    />
+                                </View>
+                                <Text style={[vStyles.optionLabel, value === opt.value && vStyles.optionLabelActive]}>
                                     {opt.label}
                                 </Text>
                                 {value === opt.value ? (
-                                    <Text style={vdStyles.optionCheck}>✓</Text>
+                                    <Ionicons name="checkmark" size={18} color={Colors.primary} />
                                 ) : null}
                             </TouchableOpacity>
                         ))}
@@ -110,91 +92,76 @@ function VehicleDropdown({ value, onChange }: VehicleDropdownProps) {
     );
 }
 
-const vdStyles = StyleSheet.create({
+const vStyles = StyleSheet.create({
     trigger: {
-        flexDirection: 'row', alignItems: 'center',
-        backgroundColor: '#FFF3EF', borderRadius: 12,
-        paddingHorizontal: 12, paddingVertical: 10,
-        borderWidth: 1.5, borderColor: '#FF6B35', gap: 6,
+        flexDirection: 'row', alignItems: 'center', gap: Spacing.xs,
+        backgroundColor: Colors.primaryLight, borderRadius: Radius.md,
+        paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
+        borderWidth: 1, borderColor: '#FFD9C7',
     },
-    triggerIcon: { fontSize: 18 },
-    triggerLabel: { fontSize: 14, fontWeight: '700', color: '#FF6B35' },
-    triggerArrow: { fontSize: 14, color: '#FF6B35', fontWeight: 'bold' },
-
-    backdrop: {
-        flex: 1, backgroundColor: 'rgba(0,0,0,0.4)',
-        justifyContent: 'center', alignItems: 'center', padding: 40,
-    },
-    sheet: {
-        backgroundColor: '#fff', borderRadius: 20,
-        width: '100%', padding: 20, elevation: 10,
-    },
-    sheetTitle: {
-        fontSize: 16, fontWeight: 'bold', color: '#222',
-        marginBottom: 14, textAlign: 'center',
-    },
+    triggerLabel: { ...Typography.buttonSm, color: Colors.primary },
+    backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', alignItems: 'center', padding: Spacing.xl },
+    sheet: { backgroundColor: Colors.surface, borderRadius: Radius.xl, width: '100%', padding: Spacing.lg, ...Shadow.lg },
+    sheetTitle: { ...Typography.h3, color: Colors.textPrimary, marginBottom: Spacing.md, textAlign: 'center' },
     option: {
-        flexDirection: 'row', alignItems: 'center', gap: 14,
-        padding: 14, borderRadius: 12, marginBottom: 8,
-        backgroundColor: '#f9f9f9', borderWidth: 1.5, borderColor: '#f0f0f0',
+        flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
+        padding: Spacing.md, borderRadius: Radius.lg, marginBottom: Spacing.sm,
+        backgroundColor: Colors.bg, borderWidth: 1, borderColor: Colors.border,
     },
-    optionActive: { borderColor: '#FF6B35', backgroundColor: '#FFF3EF' },
-    optionIcon: { fontSize: 26 },
-    optionLabel: { fontSize: 16, fontWeight: '600', color: '#555', flex: 1 },
-    optionLabelActive: { color: '#FF6B35' },
-    optionCheck: { fontSize: 18, color: '#FF6B35', fontWeight: 'bold' },
+    optionActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryLight },
+    optionIcon: {
+        width: 40, height: 40, borderRadius: Radius.md,
+        backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center',
+    },
+    optionIconActive: { backgroundColor: '#FFD9C7' },
+    optionLabel: { ...Typography.bodyLg, color: Colors.textSecondary, flex: 1 },
+    optionLabelActive: { color: Colors.primary, fontWeight: '600' },
 });
 
 // ─── Offer Slider ─────────────────────────────────────────────────────────────
 function OfferSlider() {
-    const flatListRef = useRef<FlatList>(null);
-    const [activeIndex, setActiveIndex] = useState(0);
+    const ref = useRef<FlatList>(null);
+    const [active, setActive] = useState<number>(0);
 
     useEffect(() => {
-        const interval = setInterval(() => {
-            const next = (activeIndex + 1) % OFFER_SLIDES.length;
-            flatListRef.current?.scrollToIndex({ index: next, animated: true });
-            setActiveIndex(next);
-        }, 3000);
-        return () => clearInterval(interval);
-    }, [activeIndex]);
+        const t = setInterval(() => {
+            const next = (active + 1) % OFFER_SLIDES.length;
+            ref.current?.scrollToIndex({ index: next, animated: true });
+            setActive(next);
+        }, 3500);
+        return () => clearInterval(t);
+    }, [active]);
 
     return (
-        <View style={sliderStyles.container}>
+        <View>
             <FlatList
-                ref={flatListRef}
+                ref={ref}
                 data={OFFER_SLIDES}
-                keyExtractor={(item) => item.id}
-                horizontal
-                pagingEnabled
+                horizontal pagingEnabled
                 showsHorizontalScrollIndicator={false}
-                onMomentumScrollEnd={(e) => {
-                    const idx = Math.round(e.nativeEvent.contentOffset.x / (width - 32));
-                    setActiveIndex(idx);
-                }}
+                keyExtractor={(i) => i.id}
+                onMomentumScrollEnd={(e) =>
+                    setActive(Math.round(e.nativeEvent.contentOffset.x / (width - Spacing.md * 2)))
+                }
                 renderItem={({ item }) => (
-                    <View style={[sliderStyles.slide, { backgroundColor: item.bg, width: width - 32 }]}>
-                        <View style={sliderStyles.slideTag}>
-                            <Text style={sliderStyles.slideTagText}>{item.tag}</Text>
+                    <View style={[oStyles.slide, { backgroundColor: item.bg, width: width - Spacing.md * 2 }]}>
+                        <View style={oStyles.tag}>
+                            <Text style={oStyles.tagText}>{item.label}</Text>
                         </View>
-                        <View style={sliderStyles.slideContent}>
-                            <View>
-                                <Text style={sliderStyles.slideTitle}>{item.title}</Text>
-                                <Text style={sliderStyles.slideDesc}>{item.desc}</Text>
-                            </View>
-                            <Text style={sliderStyles.slideIcon}>{item.icon}</Text>
-                        </View>
+                        <Text style={oStyles.title}>{item.title}</Text>
+                        <Text style={oStyles.desc}>{item.desc}</Text>
+                        <TouchableOpacity style={oStyles.cta}>
+                            <Text style={oStyles.ctaText}>Book Now</Text>
+                            <Ionicons name="arrow-forward" size={14} color={Colors.primary} />
+                        </TouchableOpacity>
                     </View>
                 )}
             />
-            <View style={sliderStyles.dots}>
+            <View style={oStyles.dots}>
                 {OFFER_SLIDES.map((_, i) => (
                     <View
                         key={i}
-                        style={[
-                            sliderStyles.dot,
-                            { width: i === activeIndex ? 20 : 6, backgroundColor: i === activeIndex ? '#FF6B35' : '#ddd' },
-                        ]}
+                        style={[oStyles.dot, { width: i === active ? 20 : 6, opacity: i === active ? 1 : 0.3 }]}
                     />
                 ))}
             </View>
@@ -202,50 +169,45 @@ function OfferSlider() {
     );
 }
 
-const sliderStyles = StyleSheet.create({
-    container: { marginBottom: 8 },
-    slide: { borderRadius: 16, padding: 20, minHeight: 130, justifyContent: 'space-between' },
-    slideTag: {
-        backgroundColor: 'rgba(255,255,255,0.25)', alignSelf: 'flex-start',
-        paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20, marginBottom: 8,
+const oStyles = StyleSheet.create({
+    slide: { borderRadius: Radius.lg, padding: Spacing.lg, minHeight: 148 },
+    tag: {
+        alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.2)',
+        paddingHorizontal: Spacing.sm, paddingVertical: 3,
+        borderRadius: Radius.full, marginBottom: Spacing.sm,
     },
-    slideTagText: { color: '#fff', fontSize: 10, fontWeight: '800', letterSpacing: 1 },
-    slideContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
-    slideTitle: { fontSize: 20, fontWeight: 'bold', color: '#fff', marginBottom: 4 },
-    slideDesc: { fontSize: 13, color: 'rgba(255,255,255,0.85)', maxWidth: '75%', lineHeight: 18 },
-    slideIcon: { fontSize: 48 },
-    dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 12 },
-    dot: { height: 6, borderRadius: 3 },
+    tagText: { ...Typography.overline, color: '#fff', textTransform: 'uppercase' },
+    title: { ...Typography.h1, color: '#fff', marginBottom: Spacing.xs },
+    desc: { ...Typography.body, color: 'rgba(255,255,255,0.8)', marginBottom: Spacing.md },
+    cta: {
+        flexDirection: 'row', alignItems: 'center', gap: Spacing.xs,
+        backgroundColor: '#fff', alignSelf: 'flex-start',
+        paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
+        borderRadius: Radius.full,
+    },
+    ctaText: { ...Typography.buttonSm, color: Colors.primary },
+    dots: { flexDirection: 'row', justifyContent: 'center', gap: Spacing.xs, marginTop: Spacing.md },
+    dot: { height: 6, borderRadius: 3, backgroundColor: Colors.primary },
 });
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function HomeScreen() {
     const user = useAuthStore((s) => s.user);
     const router = useRouter();
-
     const [vehicle, setVehicle] = useState<VehicleType>('bike');
     const [locationText, setLocationText] = useState('Fetching location...');
     const [locLoading, setLocLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [suggestions, setSuggestions] = useState<string[]>([]);
 
-    // ── Fetch GPS location on mount ──────────────────────────────────────────
     useEffect(() => {
         (async () => {
             const { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') {
-                setLocationText('Location permission denied');
-                setLocLoading(false);
-                return;
-            }
+            if (status !== 'granted') { setLocationText('Location unavailable'); setLocLoading(false); return; }
             const loc = await Location.getCurrentPositionAsync({});
-            const [place] = await Location.reverseGeocodeAsync({
-                latitude: loc.coords.latitude,
-                longitude: loc.coords.longitude,
-            });
+            const [place] = await Location.reverseGeocodeAsync(loc.coords);
             if (place) {
-                const parts = [place.street, place.district ?? place.subregion, place.city]
-                    .filter(Boolean);
+                const parts = [place.street, place.district ?? place.subregion, place.city].filter(Boolean);
                 setLocationText(parts.join(', '));
             } else {
                 setLocationText('Location found');
@@ -254,354 +216,273 @@ export default function HomeScreen() {
         })();
     }, []);
 
-    // ── Search suggestions ───────────────────────────────────────────────────
     const handleSearch = (text: string) => {
         setSearchQuery(text);
-        if (text.trim().length === 0) {
-            setSuggestions([]);
-            return;
-        }
-        const filtered = ALL_SERVICES.filter((s) =>
-            s.toLowerCase().includes(text.toLowerCase())
+        setSuggestions(
+            text.trim()
+                ? ALL_SERVICES.filter((s) => s.toLowerCase().includes(text.toLowerCase())).slice(0, 5)
+                : []
         );
-        setSuggestions(filtered.slice(0, 6));
     };
+
+    const ITEM_W = (width - Spacing.md * 2 - Spacing.sm * 2) / 3;
 
     return (
         <ScrollView
             style={styles.container}
-            contentContainerStyle={{ paddingBottom: 40 }}
+            contentContainerStyle={styles.content}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
         >
 
-            {/* ── SECTION 1: Header + Location + Vehicle + Search ─────────── */}
-            <View style={styles.section1}>
-
-                {/* Greeting row */}
-                <View style={styles.greetRow}>
-                    <View>
-                        <Text style={styles.greetSub}>Good day,</Text>
-                        <Text style={styles.greetName}>{user?.name?.split(' ')[0]} 👋</Text>
-                    </View>
-                    <View style={styles.avatarCircle}>
-                        <Text style={styles.avatarText}>{user?.name?.charAt(0).toUpperCase()}</Text>
-                    </View>
-                </View>
-
-                {/* Location row */}
-                <View style={styles.locationRow}>
-                    <View style={styles.locationLeft}>
-                        <Text style={styles.locationPinIcon}>📍</Text>
-                        <View>
-                            <Text style={styles.locationLabel}>Your Location</Text>
-                            {locLoading ? (
-                                <ActivityIndicator size="small" color="#FF6B35" style={{ alignSelf: 'flex-start' }} />
-                            ) : (
-                                <Text style={styles.locationValue} numberOfLines={1}>{locationText}</Text>
-                            )}
-                        </View>
-                    </View>
-
-                    {/* Vehicle dropdown on the right */}
-                    <VehicleDropdown value={vehicle} onChange={setVehicle} />
-                </View>
-
-                {/* Divider */}
-                <View style={styles.divider} />
-
-                {/* Search bar */}
+            {/* ── Header ─────────────────────────────────────────────────── */}
+            <View style={styles.header}>
                 <View>
-                    <View style={styles.searchBox}>
-                        <Text style={styles.searchIcon}>🔍</Text>
-                        <TextInput
-                            style={styles.searchInput}
-                            placeholder={`Search ${vehicle} services...`}
-                            placeholderTextColor="#aaa"
-                            value={searchQuery}
-                            onChangeText={handleSearch}
-                            returnKeyType="search"
-                        />
-                        {searchQuery.length > 0 ? (
-                            <TouchableOpacity onPress={() => { setSearchQuery(''); setSuggestions([]); }}>
-                                <Text style={styles.clearBtn}>✕</Text>
-                            </TouchableOpacity>
-                        ) : null}
-                    </View>
-
-                    {/* Suggestions dropdown */}
-                    {suggestions.length > 0 ? (
-                        <View style={styles.suggestionBox}>
-                            {suggestions.map((s) => (
-                                <TouchableOpacity
-                                    key={s}
-                                    style={styles.suggestionItem}
-                                    onPress={() => {
-                                        setSearchQuery(s);
-                                        setSuggestions([]);
-                                        router.push('/(customer)');
-                                    }}
-                                >
-                                    <Text style={styles.suggestionIcon}>🔧</Text>
-                                    <Text style={styles.suggestionText}>{s}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    ) : null}
+                    <Text style={styles.greetSub}>Good day</Text>
+                    <Text style={styles.greetName}>{user?.name?.split(' ')[0]}</Text>
+                </View>
+                <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>{user?.name?.charAt(0).toUpperCase()}</Text>
                 </View>
             </View>
 
-            {/* ── SECTION 2: Offer Slider ──────────────────────────────────── */}
+            {/* ── Location + Vehicle ─────────────────────────────────────── */}
+            <View style={styles.locationRow}>
+                <View style={styles.locationLeft}>
+                    <View style={styles.locationIconBox}>
+                        <Ionicons name="location" size={16} color={Colors.primary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.locationLabel}>Your Location</Text>
+                        {locLoading
+                            ? <ActivityIndicator size="small" color={Colors.primary} style={{ alignSelf: 'flex-start', marginTop: 2 }} />
+                            : <Text style={styles.locationValue} numberOfLines={1}>{locationText}</Text>
+                        }
+                    </View>
+                </View>
+                <VehicleDropdown value={vehicle} onChange={setVehicle} />
+            </View>
+
+            {/* ── Search ─────────────────────────────────────────────────── */}
+            <View style={styles.searchWrap}>
+                <View style={styles.searchBox}>
+                    <Ionicons name="search" size={18} color={Colors.textTertiary} />
+                    <TextInput
+                        style={styles.searchInput}
+                        placeholder={`Search ${vehicle} services...`}
+                        placeholderTextColor={Colors.textTertiary}
+                        value={searchQuery}
+                        onChangeText={handleSearch}
+                    />
+                    {searchQuery.length > 0 ? (
+                        <TouchableOpacity onPress={() => { setSearchQuery(''); setSuggestions([]); }}>
+                            <Ionicons name="close-circle" size={18} color={Colors.textTertiary} />
+                        </TouchableOpacity>
+                    ) : null}
+                </View>
+                {suggestions.length > 0 ? (
+                    <View style={styles.suggestionBox}>
+                        {suggestions.map((s) => (
+                            <TouchableOpacity
+                                key={s}
+                                style={styles.suggestionRow}
+                                onPress={() => { setSearchQuery(s); setSuggestions([]); router.push('/(customer)' as any); }}
+                            >
+                                <Ionicons name="build-outline" size={15} color={Colors.textTertiary} />
+                                <Text style={styles.suggestionText}>{s}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                ) : null}
+            </View>
+
+            {/* ── Offers ─────────────────────────────────────────────────── */}
             <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>🔥 Offers & Deals</Text>
-                    <TouchableOpacity><Text style={styles.seeAll}>See all</Text></TouchableOpacity>
+                <View style={styles.sectionRow}>
+                    <Text style={styles.sectionTitle}>Offers & Deals</Text>
+                    <TouchableOpacity><Text style={styles.sectionLink}>View all</Text></TouchableOpacity>
                 </View>
                 <OfferSlider />
             </View>
 
-            {/* ── SECTION 3: Split cards ───────────────────────────────────── */}
+            {/* ── Services Cards ─────────────────────────────────────────── */}
             <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>🛠️ Our Services</Text>
-                </View>
-                <View style={styles.splitRow}>
+                <Text style={styles.sectionTitle}>Our Services</Text>
+                <View style={styles.servicesRow}>
+
                     <TouchableOpacity
-                        style={[styles.splitCard, { backgroundColor: '#FF6B35' }]}
-                        onPress={() => router.push('/(customer)')}
+                        style={[styles.serviceCard, { backgroundColor: Colors.primary }]}
+                        onPress={() => router.push('/(customer)' as any)}
                         activeOpacity={0.88}
                     >
-                        <View style={styles.splitIconBox}>
-                            <Text style={styles.splitIcon}>📅</Text>
+                        <View style={styles.serviceCardIcon}>
+                            <Ionicons name="calendar-outline" size={22} color={Colors.primary} />
                         </View>
-                        <Text style={styles.splitCardTitle}>Book a{'\n'}Service</Text>
-                        <Text style={styles.splitCardDesc}>
-                            Schedule at your preferred garage & time
-                        </Text>
-                        <View style={styles.splitArrow}>
-                            <Text style={styles.splitArrowText}>→</Text>
+                        <Text style={styles.serviceCardTitle}>Book a{'\n'}Service</Text>
+                        <Text style={styles.serviceCardDesc}>Schedule at your preferred garage</Text>
+                        <View style={styles.serviceCardArrow}>
+                            <Ionicons name="arrow-forward" size={14} color={Colors.primary} />
                         </View>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={[styles.splitCard, { backgroundColor: '#2563EB' }]}
+                        style={[styles.serviceCard, { backgroundColor: '#1D4ED8' }]}
                         activeOpacity={0.88}
                     >
-                        <View style={styles.splitIconBox}>
-                            <Text style={styles.splitIcon}>🚿</Text>
+                        <View style={styles.serviceCardIcon}>
+                            <Ionicons name="water-outline" size={22} color="#1D4ED8" />
                         </View>
-                        <Text style={styles.splitCardTitle}>Washing{'\n'}Service</Text>
-                        <Text style={styles.splitCardDesc}>
-                            Deep clean & foam wash at your doorstep
-                        </Text>
-                        <View style={styles.splitArrow}>
-                            <Text style={styles.splitArrowText}>→</Text>
+                        <Text style={styles.serviceCardTitle}>Washing{'\n'}Service</Text>
+                        <Text style={styles.serviceCardDesc}>Deep clean at your doorstep</Text>
+                        <View style={styles.serviceCardArrow}>
+                            <Ionicons name="arrow-forward" size={14} color="#1D4ED8" />
                         </View>
                     </TouchableOpacity>
+
                 </View>
             </View>
 
-            {/* ── SECTION 4: CTA ──────────────────────────────────────────── */}
-            <View style={styles.section}>
-                <TouchableOpacity
-                    style={styles.ctaCard}
-                    onPress={() => router.push('/(customer)')}
-                    activeOpacity={0.9}
-                >
-                    <View style={styles.ctaLeft}>
-                        <Text style={styles.ctaEmoji}>🏍️</Text>
-                        <View>
-                            <Text style={styles.ctaTitle}>Book Your First Service</Text>
-                            <Text style={styles.ctaSubtitle}>Find garages near you in seconds</Text>
-                        </View>
+            {/* ── CTA Banner ─────────────────────────────────────────────── */}
+            <TouchableOpacity
+                style={styles.ctaBanner}
+                onPress={() => router.push('/(customer)' as any)}
+                activeOpacity={0.9}
+            >
+                <View style={styles.ctaLeft}>
+                    <View style={styles.ctaIconBox}>
+                        <Ionicons name="flash" size={20} color={Colors.primary} />
                     </View>
-                    <View style={styles.ctaArrowBox}>
-                        <Text style={styles.ctaArrow}>→</Text>
+                    <View>
+                        <Text style={styles.ctaTitle}>Book Your First Service</Text>
+                        <Text style={styles.ctaSub}>Find garages near you in seconds</Text>
                     </View>
-                </TouchableOpacity>
-            </View>
-
-            {/* ── SECTION 5: Curated Services ─────────────────────────────── */}
-            {/* ── SECTION 5: Curated Services ─────────────────────────────── */}
-            <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>⚡ Quick Services</Text>
-                    <TouchableOpacity><Text style={styles.seeAll}>View all</Text></TouchableOpacity>
                 </View>
+                <View style={styles.ctaArrow}>
+                    <Ionicons name="arrow-forward" size={16} color="#fff" />
+                </View>
+            </TouchableOpacity>
 
-                <View style={styles.serviceGrid}>
-                    {CURATED_SERVICES.map((service) => (
+            {/* ── Quick Services ─────────────────────────────────────────── */}
+            <View style={styles.section}>
+                <View style={styles.sectionRow}>
+                    <Text style={styles.sectionTitle}>Quick Services</Text>
+                    <TouchableOpacity><Text style={styles.sectionLink}>View all</Text></TouchableOpacity>
+                </View>
+                <View style={styles.quickGrid}>
+                    {QUICK_SERVICES.map((s) => (
                         <TouchableOpacity
-                            key={service.id}
-                            style={[styles.serviceBlock, { backgroundColor: service.bg }]}
+                            key={s.id}
+                            style={[styles.quickBlock, { backgroundColor: s.bg, width: ITEM_W }]}
                             activeOpacity={0.85}
                         >
-                            <View style={[styles.serviceIconCircle, { backgroundColor: service.color + '25' }]}>
-                                <Text style={styles.serviceIcon}>{service.icon}</Text>
+                            <View style={[styles.quickIconBox, { backgroundColor: s.color + '20' }]}>
+                                <Ionicons name={s.icon} size={22} color={s.color} />
                             </View>
-                            <Text style={[styles.serviceLabel, { color: service.color }]}>
-                                {service.label}
-                            </Text>
+                            <Text style={[styles.quickLabel, { color: s.color }]}>{s.label}</Text>
                         </TouchableOpacity>
                     ))}
                 </View>
             </View>
 
-            {/* </View> */}
-
-        </ScrollView >
+        </ScrollView>
     );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f5f5f5' },
+    container: { flex: 1, backgroundColor: Colors.bg },
+    content: { paddingBottom: 32 },
 
-    // Section 1
-    section1: {
-        backgroundColor: '#fff',
-        paddingHorizontal: 16,
-        paddingTop: 20,
-        paddingBottom: 20,
-        marginBottom: 10,
-    },
-    greetRow: {
+    header: {
         flexDirection: 'row', justifyContent: 'space-between',
-        alignItems: 'center', marginBottom: 18,
+        alignItems: 'center', backgroundColor: Colors.surface,
+        paddingHorizontal: Spacing.md, paddingTop: 56, paddingBottom: Spacing.lg,
+        borderBottomWidth: 1, borderBottomColor: Colors.borderLight,
     },
-    greetSub: { fontSize: 13, color: '#aaa' },
-    greetName: { fontSize: 22, fontWeight: 'bold', color: '#222' },
-    avatarCircle: {
-        width: 44, height: 44, borderRadius: 22,
-        backgroundColor: '#FF6B35', justifyContent: 'center', alignItems: 'center',
+    greetSub: { ...Typography.caption, color: Colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8 },
+    greetName: { ...Typography.h1, color: Colors.textPrimary, marginTop: 2 },
+    avatar: {
+        width: 42, height: 42, borderRadius: 21,
+        backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center',
     },
-    avatarText: { color: '#fff', fontWeight: 'bold', fontSize: 18 },
+    avatarText: { ...Typography.h3, color: '#fff', fontWeight: '700' },
 
-    // Location row
     locationRow: {
-        flexDirection: 'row', justifyContent: 'space-between',
-        alignItems: 'center', marginBottom: 16,
+        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+        backgroundColor: Colors.surface, paddingHorizontal: Spacing.md,
+        paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.borderLight,
+        marginBottom: Spacing.xs,
     },
-    locationLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 12 },
-    locationPinIcon: { fontSize: 22 },
-    locationLabel: { fontSize: 11, color: '#aaa', fontWeight: '500' },
-    locationValue: { fontSize: 14, fontWeight: '700', color: '#222', maxWidth: width * 0.45 },
+    locationLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, flex: 1, marginRight: Spacing.md },
+    locationIconBox: {
+        width: 32, height: 32, borderRadius: Radius.sm,
+        backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center',
+    },
+    locationLabel: { ...Typography.caption, color: Colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5 },
+    locationValue: { ...Typography.body, color: Colors.textPrimary, fontWeight: '600', marginTop: 2 },
 
-    divider: { height: 1, backgroundColor: '#f0f0f0', marginBottom: 16 },
-
-    // Search
+    searchWrap: { backgroundColor: Colors.surface, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, marginBottom: Spacing.xs },
     searchBox: {
-        flexDirection: 'row', alignItems: 'center',
-        backgroundColor: '#f5f5f5', borderRadius: 14,
-        paddingHorizontal: 14, paddingVertical: 12,
-        borderWidth: 1, borderColor: '#eee', gap: 8,
+        flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+        backgroundColor: Colors.bg, borderRadius: Radius.lg,
+        paddingHorizontal: Spacing.md, paddingVertical: 12,
+        borderWidth: 1, borderColor: Colors.border,
     },
-    searchIcon: { fontSize: 16 },
-    searchInput: { flex: 1, fontSize: 14, color: '#222' },
-    clearBtn: { fontSize: 14, color: '#aaa', paddingHorizontal: 4 },
-
-    // Suggestions
+    searchInput: { ...Typography.bodyLg, flex: 1, color: Colors.textPrimary },
     suggestionBox: {
-        backgroundColor: '#fff', borderRadius: 12, marginTop: 4,
-        borderWidth: 1, borderColor: '#eee', elevation: 4,
-        shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8,
-        overflow: 'hidden',
+        backgroundColor: Colors.surface, borderRadius: Radius.lg,
+        marginTop: Spacing.sm, borderWidth: 1, borderColor: Colors.border, ...Shadow.md, overflow: 'hidden',
     },
-    suggestionItem: {
-        flexDirection: 'row', alignItems: 'center', gap: 12,
-        paddingVertical: 12, paddingHorizontal: 14,
-        borderBottomWidth: 1, borderBottomColor: '#f8f8f8',
+    suggestionRow: {
+        flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+        paddingVertical: 13, paddingHorizontal: Spacing.md,
+        borderBottomWidth: 1, borderBottomColor: Colors.borderLight,
     },
-    suggestionIcon: { fontSize: 16 },
-    suggestionText: { fontSize: 14, color: '#333', fontWeight: '500' },
+    suggestionText: { ...Typography.body, color: Colors.textPrimary },
 
-    // Generic section
-    section: {
-        backgroundColor: '#fff', paddingHorizontal: 16,
-        paddingTop: 18, paddingBottom: 18, marginBottom: 10,
-    },
-    sectionHeader: {
-        flexDirection: 'row', justifyContent: 'space-between',
-        alignItems: 'center', marginBottom: 14,
-    },
-    sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#222' },
-    seeAll: { fontSize: 13, color: '#FF6B35', fontWeight: '600' },
+    section: { backgroundColor: Colors.surface, padding: Spacing.md, marginBottom: Spacing.xs },
+    sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md },
+    sectionTitle: { ...Typography.h2, color: Colors.textPrimary },
+    sectionLink: { ...Typography.buttonSm, color: Colors.primary },
 
-    // Split cards
-    splitRow: { flexDirection: 'row', gap: 12 },
-    splitCard: { flex: 1, borderRadius: 18, padding: 16, minHeight: 170, justifyContent: 'space-between' },
-    splitIconBox: {
-        width: 44, height: 44, borderRadius: 12,
+    servicesRow: { flexDirection: 'row', gap: Spacing.sm },
+    serviceCard: {
+        flex: 1, borderRadius: Radius.lg, padding: Spacing.md, minHeight: 160,
+        justifyContent: 'space-between',
+    },
+    serviceCardIcon: {
+        width: 40, height: 40, borderRadius: Radius.sm,
         backgroundColor: 'rgba(255,255,255,0.25)',
-        justifyContent: 'center', alignItems: 'center', marginBottom: 8,
+        alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.sm,
     },
-    splitIcon: { fontSize: 22 },
-    splitCardTitle: { fontSize: 17, fontWeight: 'bold', color: '#fff', lineHeight: 22, marginBottom: 6 },
-    splitCardDesc: { fontSize: 11, color: 'rgba(255,255,255,0.8)', lineHeight: 15, flex: 1 },
-    splitArrow: {
-        alignSelf: 'flex-end', backgroundColor: 'rgba(255,255,255,0.25)',
-        width: 30, height: 30, borderRadius: 15,
-        justifyContent: 'center', alignItems: 'center', marginTop: 8,
-    },
-    splitArrowText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-
-    // CTA
-    ctaCard: {
-        backgroundColor: '#FFF3EF', borderRadius: 16, padding: 18,
-        flexDirection: 'row', alignItems: 'center',
-        justifyContent: 'space-between', borderWidth: 1, borderColor: '#FFD9C7',
-    },
-    ctaLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
-    ctaEmoji: { fontSize: 36 },
-    ctaTitle: { fontSize: 16, fontWeight: 'bold', color: '#FF6B35' },
-    ctaSubtitle: { fontSize: 12, color: '#aaa', marginTop: 2 },
-    ctaArrowBox: {
-        width: 38, height: 38, borderRadius: 19,
-        backgroundColor: '#FF6B35', justifyContent: 'center', alignItems: 'center',
-    },
-    ctaArrow: { color: '#fff', fontWeight: 'bold', fontSize: 18 },
-
-    // Service grid
-    // serviceGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-    // serviceBlock: {
-    //     width: (width - 56) / 3, borderRadius: 16,
-    //     padding: 14, alignItems: 'center', justifyContent: 'center', gap: 8,
-    // },
-    // serviceIconCircle: {
-    //     width: 52, height: 52, borderRadius: 26,
-    //     justifyContent: 'center', alignItems: 'center',
-    // },
-    // serviceIcon: { fontSize: 24 },
-    // serviceLabel: { fontSize: 12, fontWeight: '700', textAlign: 'center' },
-    // ─── REPLACE these 4 styles at the bottom of StyleSheet.create({}) ───────────
-
-    serviceGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 10,                        // ← gap between items
-        paddingHorizontal: 1,
-    },
-    serviceBlock: {
-        width: (width - 56) / 3,        // ← (screenWidth - padding - gaps) / 3
-        paddingVertical: 14,
-        paddingHorizontal: 6,
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-        borderRadius: 14,               // ← rounded corners on each block
-    },
-    serviceIconCircle: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    serviceIcon: { fontSize: 20 },
-    serviceLabel: {
-        fontSize: 11,
-        fontWeight: '700',
-        textAlign: 'center',
+    serviceCardTitle: { ...Typography.h2, color: '#fff', lineHeight: 26 },
+    serviceCardDesc: { ...Typography.caption, color: 'rgba(255,255,255,0.75)', marginTop: Spacing.xs, lineHeight: 16 },
+    serviceCardArrow: {
+        alignSelf: 'flex-end',
+        backgroundColor: '#fff',
+        width: 28, height: 28, borderRadius: 14,
+        alignItems: 'center', justifyContent: 'center', marginTop: Spacing.sm,
     },
 
+    ctaBanner: {
+        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+        backgroundColor: Colors.surface, padding: Spacing.md,
+        borderTopWidth: 1, borderBottomWidth: 1, borderColor: Colors.borderLight,
+        marginBottom: Spacing.xs,
+    },
+    ctaLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, flex: 1 },
+    ctaIconBox: {
+        width: 44, height: 44, borderRadius: Radius.md,
+        backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center',
+    },
+    ctaTitle: { ...Typography.h3, color: Colors.textPrimary },
+    ctaSub: { ...Typography.caption, color: Colors.textSecondary, marginTop: 2 },
+    ctaArrow: {
+        width: 36, height: 36, borderRadius: 18,
+        backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center',
+    },
+
+    quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+    quickBlock: { borderRadius: Radius.lg, padding: Spacing.md, alignItems: 'center', gap: Spacing.sm },
+    quickIconBox: { width: 48, height: 48, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
+    quickLabel: { ...Typography.caption, fontWeight: '600', textAlign: 'center' },
 });
