@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../constants/theme';
 import Toast from '../../components/Toast';
 import { useToast } from '../../hooks/useToast';
+import { router } from 'expo-router';
 
 export default function CustomerAccount() {
     const user = useAuthStore((s) => s.user);
@@ -27,6 +28,19 @@ export default function CustomerAccount() {
             await logoutUser();
             setUser(null);
         }, 1000);
+    };
+
+    // ── Open edit — reset fields to current user values ───────────────────────
+    const handleOpenEdit = () => {
+        setName(user?.name ?? '');
+        setPhone(user?.phone ?? '');
+        setEditMode(true);
+    };
+
+    const handleCancelEdit = () => {
+        setName(user?.name ?? '');
+        setPhone(user?.phone ?? '');
+        setEditMode(false);
     };
 
     const handleSave = async () => {
@@ -61,121 +75,164 @@ export default function CustomerAccount() {
         }
     };
 
-    const MENU_ITEMS = [
-        { icon: 'notifications-outline' as const, label: 'Notifications', sub: 'Manage alerts & reminders' },
-        { icon: 'shield-checkmark-outline' as const, label: 'Privacy & Security', sub: 'Password and data settings' },
-        { icon: 'help-circle-outline' as const, label: 'Help & Support', sub: 'FAQs and contact support' },
-        { icon: 'information-circle-outline' as const, label: 'About MotoBee', sub: 'Version 1.0.0' },
+    const MENU_SECTIONS = [
+        {
+            title: 'Activity',
+            items: [
+                { icon: 'receipt-outline' as const, label: 'Order History', sub: 'View all past bookings', route: '/(customer)/my-bookings', color: Colors.primary },
+                { icon: 'car-sport-outline' as const, label: 'My Vehicles', sub: 'Manage your bikes & scooties', route: '/(customer)/my-vehicles', color: '#7C3AED' },
+                { icon: 'gift-outline' as const, label: 'Refer & Earn', sub: 'Invite friends and earn rewards', route: '/(customer)/refer-earn', color: '#D97706' },
+            ],
+        },
+        {
+            title: 'Preferences',
+            items: [
+                { icon: 'notifications-outline' as const, label: 'Notifications', sub: 'Manage alerts & reminders', route: null, color: '#0891B2' },
+                { icon: 'shield-checkmark-outline' as const, label: 'Privacy & Security', sub: 'Password and data settings', route: null, color: '#059669' },
+            ],
+        },
+        {
+            title: 'More',
+            items: [
+                { icon: 'help-circle-outline' as const, label: 'Help & Support', sub: 'FAQs and contact support', route: null, color: '#7C3AED' },
+                { icon: 'information-circle-outline' as const, label: 'About MotoBee', sub: 'Version 1.0.0', route: '/(customer)/about', color: Colors.textTertiary },
+            ],
+        },
     ];
 
     return (
-        <View style={{ flex: 1 }}>
-            <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-
-                {/* Header */}
+        <View style={{ flex: 1, backgroundColor: Colors.bg }}>
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+            >
+                {/* ── Header ───────────────────────────────────────────────── */}
                 <View style={styles.header}>
                     <Text style={styles.title}>Account</Text>
                 </View>
 
-                {/* Profile card */}
-                <View style={styles.profileCard}>
-                    <View style={styles.avatarBox}>
-                        <Text style={styles.avatarText}>{user?.name?.charAt(0).toUpperCase()}</Text>
-                    </View>
-                    <View style={styles.profileInfo}>
-                        {editMode ? (
-                            <>
-                                <TextInput style={styles.inlineInput} value={name} onChangeText={setName} placeholderTextColor={Colors.textTertiary} />
-                                <TextInput style={[styles.inlineInput, { marginTop: Spacing.xs }]} value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholderTextColor={Colors.textTertiary} />
-                            </>
-                        ) : (
-                            <>
-                                <Text style={styles.profileName}>{user?.name}</Text>
-                                <Text style={styles.profileEmail}>{user?.email}</Text>
-                                <View style={styles.roleBadge}>
-                                    <Text style={styles.roleBadgeText}>Customer</Text>
-                                </View>
-                            </>
+                {/* ── Profile card ─────────────────────────────────────────── */}
+                <View style={styles.profileSection}>
+                    <View style={styles.profileCard}>
+                        <View style={styles.avatarBox}>
+                            <Text style={styles.avatarText}>
+                                {user?.name?.charAt(0).toUpperCase()}
+                            </Text>
+                        </View>
+
+                        <View style={styles.profileInfo}>
+                            {editMode ? (
+                                <>
+                                    <TextInput
+                                        style={styles.inlineInput}
+                                        value={name}
+                                        onChangeText={setName}
+                                        placeholder="Full name"
+                                        placeholderTextColor={Colors.textTertiary}
+                                    />
+                                    <TextInput
+                                        style={[styles.inlineInput, { marginTop: Spacing.xs }]}
+                                        value={phone}
+                                        onChangeText={setPhone}
+                                        placeholder="Phone number"
+                                        keyboardType="phone-pad"
+                                        placeholderTextColor={Colors.textTertiary}
+                                    />
+                                </>
+                            ) : (
+                                <>
+                                    <Text style={styles.profileName}>{user?.name}</Text>
+                                    <Text style={styles.profileEmail}>{user?.email}</Text>
+                                    <View style={styles.roleBadge}>
+                                        <Text style={styles.roleBadgeText}>Customer</Text>
+                                    </View>
+                                </>
+                            )}
+                        </View>
+
+                        {/* Edit icon — only in view mode */}
+                        {!editMode && (
+                            <TouchableOpacity
+                                style={styles.editIconBtn}
+                                onPress={handleOpenEdit}     // ← was setEditMode(true)
+                            >
+                                <Ionicons name="pencil-outline" size={18} color={Colors.primary} />
+                            </TouchableOpacity>
                         )}
                     </View>
-                    {!editMode && (
-                        <TouchableOpacity style={styles.editIconBtn} onPress={() => setEditMode(true)}>
-                            <Ionicons name="pencil-outline" size={18} color={Colors.primary} />
-                        </TouchableOpacity>
+
+                    {/* ── Save / Cancel buttons — shown only in edit mode ───── */}
+                    {editMode && (
+                        <View style={styles.editRow}>
+                            <TouchableOpacity
+                                style={styles.cancelBtn}
+                                onPress={handleCancelEdit}
+                                disabled={saving}
+                            >
+                                <Text style={styles.cancelBtnText}>Cancel</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.saveBtn, saving && { opacity: 0.7 }]}
+                                onPress={handleSave}
+                                disabled={saving}
+                            >
+                                {saving ? (
+                                    <ActivityIndicator color="#fff" size="small" />
+                                ) : (
+                                    <Text style={styles.saveBtnText}>Save Changes</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
                     )}
                 </View>
 
-                {/* Edit actions */}
-                {editMode && (
-                    <View style={styles.editRow}>
-                        <TouchableOpacity
-                            style={styles.cancelBtn}
-                            onPress={() => {
-                                setName(user?.name ?? '');
-                                setPhone(user?.phone ?? '');
-                                setEditMode(false);
-                            }}
-                        >
-                            <Text style={styles.cancelBtnText}>Cancel</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={saving}>
-                            {saving
-                                ? <ActivityIndicator color="#fff" size="small" />
-                                : <Text style={styles.saveBtnText}>Save Changes</Text>
-                            }
-                        </TouchableOpacity>
-                    </View>
-                )}
-
-                {/* Info rows */}
-                <View style={styles.card}>
-                    {[
-                        { icon: 'call-outline' as const, label: 'Phone', value: user?.phone ?? 'Not set' },
-                        { icon: 'mail-outline' as const, label: 'Email', value: user?.email ?? '' },
-                    ].map((item, idx, arr) => (
-                        <View key={item.label}>
-                            <View style={styles.infoRow}>
-                                <View style={styles.infoIconBox}>
-                                    <Ionicons name={item.icon} size={16} color={Colors.textSecondary} />
-                                </View>
-                                <View style={styles.infoText}>
-                                    <Text style={styles.infoLabel}>{item.label}</Text>
-                                    <Text style={styles.infoValue}>{item.value}</Text>
-                                </View>
+                {/* ── Menu sections ────────────────────────────────────────── */}
+                <View style={styles.menuContainer}>
+                    {MENU_SECTIONS.map((section) => (
+                        <View key={section.title} style={styles.menuSection}>
+                            <Text style={styles.menuSectionTitle}>{section.title}</Text>
+                            <View style={styles.menuCard}>
+                                {section.items.map((item, i) => (
+                                    <React.Fragment key={item.label}>
+                                        <TouchableOpacity
+                                            style={styles.menuRow}
+                                            onPress={() => item.route && router.push(item.route as any)}
+                                            activeOpacity={item.route ? 0.7 : 1}
+                                        >
+                                            <View style={[styles.menuIconBox, { backgroundColor: item.color + '18' }]}>
+                                                <Ionicons name={item.icon} size={19} color={item.color} />
+                                            </View>
+                                            <View style={styles.menuTextWrap}>
+                                                <Text style={styles.menuLabel}>{item.label}</Text>
+                                                <Text style={styles.menuSub}>{item.sub}</Text>
+                                            </View>
+                                            <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
+                                        </TouchableOpacity>
+                                        {i < section.items.length - 1 && <View style={styles.menuDivider} />}
+                                    </React.Fragment>
+                                ))}
                             </View>
-                            {idx < arr.length - 1 && <View style={styles.divider} />}
                         </View>
                     ))}
                 </View>
 
-                {/* Menu */}
-                <View style={styles.card}>
-                    {MENU_ITEMS.map((item, idx, arr) => (
-                        <View key={item.label}>
-                            <TouchableOpacity style={styles.menuRow}>
-                                <View style={styles.menuIconBox}>
-                                    <Ionicons name={item.icon} size={17} color={Colors.textSecondary} />
-                                </View>
-                                <View style={styles.menuText}>
-                                    <Text style={styles.menuLabel}>{item.label}</Text>
-                                    <Text style={styles.menuSub}>{item.sub}</Text>
-                                </View>
-                                <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
-                            </TouchableOpacity>
-                            {idx < arr.length - 1 && <View style={styles.divider} />}
-                        </View>
-                    ))}
+                {/* ── Logout button ────────────────────────────────────────── */}
+                <View style={styles.logoutSection}>
+                    <TouchableOpacity
+                        style={styles.logoutBtn}
+                        onPress={handleLogout}
+                        activeOpacity={0.85}
+                    >
+                        <Ionicons name="log-out-outline" size={20} color={Colors.error} />
+                        <Text style={styles.logoutText}>Log Out</Text>
+                    </TouchableOpacity>
                 </View>
 
-                {/* Logout */}
-                <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-                    <Ionicons name="log-out-outline" size={18} color={Colors.error} />
-                    <Text style={styles.logoutText}>Log Out</Text>
-                </TouchableOpacity>
-
+                {/* ── App version ──────────────────────────────────────────── */}
+                <Text style={styles.versionText}>MotoBee v1.0.0</Text>
             </ScrollView>
 
-            {/* Toast */}
             <Toast
                 visible={toast.visible}
                 message={toast.message}
@@ -187,8 +244,7 @@ export default function CustomerAccount() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: Colors.bg },
-    content: { paddingBottom: 40, gap: Spacing.sm },
+    scrollContent: { paddingBottom: 40 },
 
     header: {
         backgroundColor: Colors.surface, paddingHorizontal: Spacing.md,
@@ -197,6 +253,15 @@ const styles = StyleSheet.create({
     },
     title: { ...Typography.h1, color: Colors.textPrimary },
 
+    // Profile
+    profileSection: {
+        paddingTop: Spacing.lg,
+        paddingBottom: Spacing.lg,
+        marginBottom: Spacing.md,
+        borderBottomWidth: 2,
+        borderBottomColor: Colors.borderLight,
+        gap: Spacing.sm,
+    },
     profileCard: {
         flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
         backgroundColor: Colors.surface, padding: Spacing.md,
@@ -218,30 +283,52 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.primaryLight,
     },
 
-    editRow: { flexDirection: 'row', gap: Spacing.sm, marginHorizontal: Spacing.md },
-    cancelBtn: { flex: 1, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, borderRadius: Radius.lg, alignItems: 'center' },
+    // Save / Cancel row
+    editRow: {
+        flexDirection: 'row', gap: Spacing.sm,
+        marginHorizontal: Spacing.md,
+        marginTop: Spacing.xs,
+    },
+    cancelBtn: {
+        flex: 1, borderWidth: 1, borderColor: Colors.border,
+        padding: Spacing.md, borderRadius: Radius.lg, alignItems: 'center',
+        backgroundColor: Colors.surface,
+    },
     cancelBtnText: { ...Typography.button, color: Colors.textSecondary },
-    saveBtn: { flex: 1, backgroundColor: Colors.primary, padding: Spacing.md, borderRadius: Radius.lg, alignItems: 'center' },
+    saveBtn: {
+        flex: 2, backgroundColor: Colors.primary,
+        padding: Spacing.md, borderRadius: Radius.lg, alignItems: 'center',
+    },
     saveBtnText: { ...Typography.button, color: '#fff' },
 
-    card: { backgroundColor: Colors.surface, borderRadius: Radius.lg, marginHorizontal: Spacing.md, borderWidth: 1, borderColor: Colors.border, ...Shadow.sm, overflow: 'hidden' },
-    divider: { height: 1, backgroundColor: Colors.borderLight, marginHorizontal: Spacing.md },
-    infoRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.md },
-    infoIconBox: { width: 34, height: 34, borderRadius: Radius.sm, backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
-    infoText: { flex: 1 },
-    infoLabel: { ...Typography.caption, color: Colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5 },
-    infoValue: { ...Typography.body, color: Colors.textPrimary, marginTop: 2 },
-    menuRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.md },
-    menuIconBox: { width: 34, height: 34, borderRadius: Radius.sm, backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
-    menuText: { flex: 1 },
-    menuLabel: { ...Typography.body, color: Colors.textPrimary, fontWeight: '500' },
+    // Menu
+    menuContainer: { paddingHorizontal: Spacing.md, gap: Spacing.lg },
+    menuSection: { gap: Spacing.xs },
+    menuSectionTitle: {
+        ...Typography.overline, color: Colors.textTertiary,
+        fontWeight: '700', textTransform: 'uppercase',
+        letterSpacing: 0.8, paddingHorizontal: Spacing.xs, marginBottom: 4,
+    },
+    menuCard: { backgroundColor: Colors.surface, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden', ...Shadow.sm },
+    menuRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.md, paddingHorizontal: Spacing.md },
+    menuIconBox: { width: 38, height: 38, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
+    menuTextWrap: { flex: 1 },
+    menuLabel: { ...Typography.body, color: Colors.textPrimary, fontWeight: '600' },
     menuSub: { ...Typography.caption, color: Colors.textTertiary, marginTop: 2 },
+    menuDivider: { height: 1, backgroundColor: Colors.borderLight, marginLeft: 70 },
 
+    // Logout
+    logoutSection: { marginTop: Spacing.lg, marginHorizontal: Spacing.md },
     logoutBtn: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-        gap: Spacing.sm, marginHorizontal: Spacing.md,
-        backgroundColor: Colors.errorLight, padding: Spacing.md,
-        borderRadius: Radius.lg, borderWidth: 1, borderColor: '#FECACA',
+        gap: Spacing.sm, backgroundColor: Colors.errorLight,
+        padding: Spacing.md, borderRadius: Radius.lg,
+        borderWidth: 1, borderColor: '#FECACA',
     },
     logoutText: { ...Typography.button, color: Colors.error },
+
+    versionText: {
+        ...Typography.caption, color: Colors.textTertiary,
+        textAlign: 'center', marginTop: Spacing.lg, marginBottom: Spacing.sm,
+    },
 });

@@ -70,7 +70,9 @@ export default function OwnerLayout() {
                     ),
                 }}
             />
+            <Tabs.Screen name="edit-services" options={{ href: null }} />
         </Tabs>
+
     );
 }
 

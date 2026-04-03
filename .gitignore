@@ -41,3 +41,6 @@ app-example
 # generated native folders
 /ios
 /android
+
+# change/update logs and instructions
+CHANGES.md

@@ -1,10 +1,22 @@
+// app/(customer)/_layout.tsx
+
 import { Tabs } from 'expo-router';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Colors, Typography } from '../../constants/theme';
+import { useRouter } from 'expo-router';
+import { useEffect } from 'react';
+import {
+    setupPushNotifications,
+    listenForegroundNotifications,  // ✅ was: listenForegroundMessages
+    listenNotificationTaps,         // ✅ was: listenBackgroundNotificationTap
+    checkInitialNotification,       // ✅ was: checkKilledStateNotification
+} from '../../utils/notifications';
+
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
+
 
 function TabIcon({ name, focused }: { name: IoniconsName; focused: boolean }) {
     return (
@@ -18,10 +30,45 @@ function TabIcon({ name, focused }: { name: IoniconsName; focused: boolean }) {
     );
 }
 
+
 export default function CustomerLayout() {
     const insets = useSafeAreaInsets();
+    const router = useRouter();
 
-    // Bottom bar height = icon + label + safe area + extra breathing room
+    const handleNotificationTap = (data: Record<string, string>) => {
+        // Route user to the right screen based on Django's data payload
+        if (data?.screen === 'bookings') {
+            router.push('/(customer)/my-bookings' as any);
+        }
+    };
+
+    useEffect(() => {
+        // 1 — Request permissions, get FCM token, save to Django backend
+        setupPushNotifications();
+
+        // 2 — Foreground: notification arrives while app is open
+        //     expo-notifications displays it automatically via setNotificationHandler.
+        //     Pass a callback if you want to react in-app (e.g. refetch bookings).
+        const unsubForeground = listenForegroundNotifications((notification) => {
+            console.log('[Layout] Foreground notification:', notification.request.content.data);
+            // Optional: queryClient.invalidateQueries(['bookings']);
+        });
+
+        // 3 — Tap handler: covers both background and foreground banner taps
+        const unsubTap = listenNotificationTaps(handleNotificationTap);
+
+        // 4 — Killed state: app launched by tapping a notification
+        checkInitialNotification().then((data) => {
+            if (data) handleNotificationTap(data);
+        });
+
+        return () => {
+            unsubForeground();
+            unsubTap();
+        };
+    }, []);
+
+
     const tabBarHeight = 56 + insets.bottom + 8;
 
     return (
@@ -34,6 +81,7 @@ export default function CustomerLayout() {
                 tabBarInactiveTintColor: Colors.textTertiary,
             }}
         >
+            {/* ── Visible tab screens ────────────────────────── */}
             <Tabs.Screen
                 name="home"
                 options={{
@@ -62,6 +110,15 @@ export default function CustomerLayout() {
                 }}
             />
             <Tabs.Screen
+                name="cart"
+                options={{
+                    title: 'Cart',
+                    tabBarIcon: ({ focused }) => (
+                        <TabIcon name={focused ? 'cart' : 'cart-outline'} focused={focused} />
+                    ),
+                }}
+            />
+            <Tabs.Screen
                 name="account"
                 options={{
                     title: 'Account',
@@ -70,11 +127,20 @@ export default function CustomerLayout() {
                     ),
                 }}
             />
+
+            {/* ── Hidden screens (no tab bar entry) ─────────── */}
             <Tabs.Screen name="garage-detail" options={{ href: null }} />
             <Tabs.Screen name="book-slot" options={{ href: null }} />
+            <Tabs.Screen name="my-vehicles" options={{ href: null }} />
+            <Tabs.Screen name="refer-earn" options={{ href: null }} />
+            <Tabs.Screen name="checkout" options={{ href: null }} />
+            <Tabs.Screen name="about" options={{ href: null }} />
+            <Tabs.Screen name="terms-of-service" options={{ href: null }} />
+            <Tabs.Screen name="privacy-policy" options={{ href: null }} />
         </Tabs>
     );
 }
+
 
 const styles = StyleSheet.create({
     tabBar: {

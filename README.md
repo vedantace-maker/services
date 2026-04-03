@@ -3,10 +3,11 @@
 A cross-platform mobile application built with React Native and Expo Router. This app connects bike owners (customers) with garage owners, allowing customers to find nearby garages and book service slots, while enabling garage owners to manage their bookings and schedules.
 
 ## ✨ Features
-* **Role-Based Authentication:** Distinct flows for Customers and Garage Owners.
-* **Customer App:** View available garages, calculate distance, check garage details, and book service slots.
-* **Garage Owner App:** Manage the garage schedule, view incoming bookings, and update service status.
-* **Mock Backend Integration:** Dummy authentication and local storage for rapid prototyping.
+
+- **Role-Based Authentication:** Distinct flows for Customers and Garage Owners.
+- **Customer App:** View available garages, calculate distance, check garage details, and book service slots.
+- **Garage Owner App:** Manage the garage schedule, view incoming bookings, and update service status.
+- **Mock Backend Integration:** Dummy authentication and local storage for rapid prototyping.
 
 ## 🗂️ Folder Structure Explained
 
@@ -42,3 +43,34 @@ BikeService/
     ├── storage.ts          # Wrappers for local storage (AsyncStorage/SecureStore)
     ├── distance.ts         # Math logic to calculate distances between user and garages
     └── helpers.ts          # Generic utility functions (date formatting, text capitalization)
+
+```
+```
+└── 📁app
+    └── 📁(auth)
+        ├── _layout.tsx
+        ├── login.tsx
+        ├── register.tsx
+    └── 📁(customer)
+        ├── _layout.tsx
+        ├── account.tsx
+        ├── book-slot.tsx
+        ├── garage-detail.tsx
+        ├── home.tsx
+        ├── index.tsx
+        ├── my-bookings.tsx
+        ├── my-vehicles.tsx
+        ├── refer-earn.tsx
+    └── 📁(owner)
+        ├── _layout.tsx
+        ├── account.tsx
+        ├── bookings.tsx
+        ├── index.tsx
+        ├── schedule.tsx
+    └── 📁(tabs)
+        ├── _layout.tsx
+        ├── explore.tsx
+        ├── index.tsx
+    ├── _layout.tsx
+    └── modal.tsx
+```

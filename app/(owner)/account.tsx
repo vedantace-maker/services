@@ -1,26 +1,26 @@
+// app/(owner)/account.tsx
+
 import React, { useState, useCallback } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, TextInput,
-    ScrollView, ActivityIndicator, Modal, FlatList
+    ScrollView, ActivityIndicator, Modal, FlatList,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
+import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuthStore } from '../../store/authStore';
 import { logoutUser } from '../../utils/services/authService';
-// import { getOrCreateGarage, saveGarageById } from '../../utils/storage';
 import { Garage } from '../../types';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../constants/theme';
 import Toast from '../../components/Toast';
 import { useToast } from '../../hooks/useToast';
 import * as Location from 'expo-location';
-
 import {
     getMyGarage,
     updateGarageInfo,
-    updateGarageServices,
 } from '../../utils/services/garageService';
 
-// ─── Full service catalogue ───────────────────────────────────────────────────
+// ── Full service catalogue ────────────────────────────────────────────────────
 const BIKE_CATALOGUE = [
     'Oil Change', 'Full Service', 'Chain & Sprocket', 'Brake Adjustment',
     'Air Filter Clean', 'Engine Tune-up', 'Carburetor Clean', 'Clutch Repair',
@@ -37,14 +37,9 @@ const SCOOTY_CATALOGUE = [
     'Foam Wash', 'Coolant Flush', 'Engine Tune-up', 'Fuel Injector Clean',
 ];
 
-// ─── Service Picker Modal ─────────────────────────────────────────────────────
+// ── Service Picker Modal ──────────────────────────────────────────────────────
 function ServicePickerModal({
-    visible,
-    title,
-    catalogue,
-    selected,
-    onDone,
-    onClose,
+    visible, title, catalogue, selected, onDone, onClose,
 }: {
     visible: boolean;
     title: string;
@@ -55,7 +50,6 @@ function ServicePickerModal({
 }) {
     const [current, setCurrent] = useState<string[]>(selected);
 
-    // Reset when modal opens
     React.useEffect(() => {
         if (visible) setCurrent(selected);
     }, [visible]);
@@ -70,7 +64,6 @@ function ServicePickerModal({
             <View style={pickerStyles.backdrop}>
                 <View style={pickerStyles.sheet}>
 
-                    {/* Header */}
                     <View style={pickerStyles.header}>
                         <Text style={pickerStyles.title}>{title}</Text>
                         <TouchableOpacity style={pickerStyles.closeBtn} onPress={onClose}>
@@ -79,10 +72,9 @@ function ServicePickerModal({
                     </View>
 
                     <Text style={pickerStyles.hint}>
-                        {current.length} service{current.length !== 1 ? 's' : ''} selected
+                        {String(current.length) + ' service' + (current.length !== 1 ? 's' : '') + ' selected'}
                     </Text>
 
-                    {/* Service list */}
                     <FlatList
                         data={catalogue}
                         keyExtractor={(s) => s}
@@ -108,11 +100,15 @@ function ServicePickerModal({
                         }}
                     />
 
-                    {/* Done button */}
                     <View style={pickerStyles.footer}>
-                        <TouchableOpacity style={pickerStyles.doneBtn} onPress={() => { onDone(current); onClose(); }}>
+                        <TouchableOpacity
+                            style={pickerStyles.doneBtn}
+                            onPress={() => { onDone(current); onClose(); }}
+                        >
                             <Ionicons name="checkmark-circle" size={18} color="#fff" />
-                            <Text style={pickerStyles.doneBtnText}>Confirm {current.length} Services</Text>
+                            <Text style={pickerStyles.doneBtnText}>
+                                {'Confirm ' + String(current.length) + ' Services'}
+                            </Text>
                         </TouchableOpacity>
                     </View>
 
@@ -124,42 +120,24 @@ function ServicePickerModal({
 
 const pickerStyles = StyleSheet.create({
     backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-    sheet: {
-        backgroundColor: Colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24,
-        maxHeight: '82%', paddingBottom: 32, ...Shadow.lg,
-    },
-    header: {
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        padding: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.borderLight,
-    },
+    sheet: { backgroundColor: Colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '82%', paddingBottom: 32, ...Shadow.lg },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
     title: { ...Typography.h2, color: Colors.textPrimary },
     closeBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
     hint: { ...Typography.caption, color: Colors.textTertiary, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm },
     list: { paddingHorizontal: Spacing.md },
-    row: {
-        flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
-        paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: Colors.borderLight,
-    },
+    row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
     rowActive: { backgroundColor: Colors.primaryLight, marginHorizontal: -Spacing.md, paddingHorizontal: Spacing.md, borderRadius: Radius.md },
-    checkbox: {
-        width: 22, height: 22, borderRadius: 6,
-        borderWidth: 1.5, borderColor: Colors.border,
-        alignItems: 'center', justifyContent: 'center',
-        backgroundColor: Colors.surface,
-    },
+    checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: Colors.border, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.surface },
     checkboxActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
     rowText: { ...Typography.body, color: Colors.textSecondary, flex: 1 },
     rowTextActive: { color: Colors.primary, fontWeight: '600' },
     footer: { padding: Spacing.md, paddingTop: Spacing.sm },
-    doneBtn: {
-        backgroundColor: Colors.primary, borderRadius: Radius.lg,
-        padding: Spacing.md, flexDirection: 'row',
-        alignItems: 'center', justifyContent: 'center', gap: Spacing.sm,
-    },
+    doneBtn: { backgroundColor: Colors.primary, borderRadius: Radius.lg, padding: Spacing.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm },
     doneBtnText: { ...Typography.button, color: '#fff' },
 });
 
-// ─── Reusable SectionCard ─────────────────────────────────────────────────────
+// ── SectionCard ───────────────────────────────────────────────────────────────
 function SectionCard({
     title, icon, editing, onEdit, onSave, onCancel, saving, children,
 }: {
@@ -177,7 +155,7 @@ function SectionCard({
                 {!editing && (
                     <TouchableOpacity style={cardStyles.editBtn} onPress={onEdit}>
                         <Ionicons name="pencil-outline" size={15} color={Colors.primary} />
-                        <Text style={cardStyles.editBtnText}>Edit</Text>
+                        <Text style={cardStyles.editBtnText}>{'Edit'}</Text>
                     </TouchableOpacity>
                 )}
             </View>
@@ -186,12 +164,12 @@ function SectionCard({
             {editing && (
                 <View style={cardStyles.actions}>
                     <TouchableOpacity style={cardStyles.cancelBtn} onPress={onCancel}>
-                        <Text style={cardStyles.cancelText}>Cancel</Text>
+                        <Text style={cardStyles.cancelText}>{'Cancel'}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={cardStyles.saveBtn} onPress={onSave} disabled={saving}>
                         {saving
                             ? <ActivityIndicator color="#fff" size="small" />
-                            : <Text style={cardStyles.saveText}>Save Changes</Text>
+                            : <Text style={cardStyles.saveText}>{'Save Changes'}</Text>
                         }
                     </TouchableOpacity>
                 </View>
@@ -200,7 +178,7 @@ function SectionCard({
     );
 }
 
-// ─── Reusable InfoField ───────────────────────────────────────────────────────
+// ── InfoField ─────────────────────────────────────────────────────────────────
 function InfoField({
     label, value, editing, onChangeText, keyboardType, multiline, isLast, placeholder,
 }: {
@@ -214,7 +192,8 @@ function InfoField({
             {editing ? (
                 <TextInput
                     style={[fieldStyles.input, multiline && { minHeight: 64 }]}
-                    value={value} onChangeText={onChangeText}
+                    value={value}
+                    onChangeText={onChangeText}
                     keyboardType={keyboardType ?? 'default'}
                     multiline={multiline}
                     placeholder={placeholder ?? label}
@@ -227,8 +206,9 @@ function InfoField({
     );
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+// ── Main Screen ───────────────────────────────────────────────────────────────
 export default function OwnerAccount() {
+    const router = useRouter();
     const user = useAuthStore((s) => s.user);
     const setUser = useAuthStore((s) => s.setUser);
     const { toast, showToast, hideToast } = useToast();
@@ -244,7 +224,6 @@ export default function OwnerAccount() {
     const [address, setAddress] = useState('');
     const [garagePhone, setGaragePhone] = useState('');
 
-    // ── Add these three ───────────────────────────────────────────────
     const [latitude, setLatitude] = useState<number | null>(null);
     const [longitude, setLongitude] = useState<number | null>(null);
     const [locationLabel, setLocationLabel] = useState('');
@@ -255,27 +234,12 @@ export default function OwnerAccount() {
 
     const [editProfile, setEditProfile] = useState(false);
     const [editGarage, setEditGarage] = useState(false);
-    const [editServices, setEditServices] = useState(false);
 
-    // Picker modals
     const [bikePickerOpen, setBikePickerOpen] = useState(false);
     const [scootyPickerOpen, setScootyPickerOpen] = useState(false);
 
     useFocusEffect(useCallback(() => { load(); }, []));
 
-    // const load = async () => {
-    //     setLoading(true);
-    //     const g = await getOrCreateGarage(user!.uid, user!.name);
-    //     setGarage(g);
-    //     setName(user!.name);
-    //     setPhone(user!.phone ?? '');
-    //     setGarageName(g.name);
-    //     setAddress(g.address);
-    //     setGaragePhone(g.phone);
-    //     setBikeServices(g.services?.bike ?? []);
-    //     setScootyServices(g.services?.scooty ?? []);
-    //     setLoading(false);
-    // };
     const load = async () => {
         setLoading(true);
         try {
@@ -289,11 +253,10 @@ export default function OwnerAccount() {
             setBikeServices(g.services?.bike ?? []);
             setScootyServices(g.services?.scooty ?? []);
 
-            // ── Pre-fill existing coordinates ─────────────────────────────
             if (g.latitude && g.longitude) {
                 setLatitude(g.latitude);
                 setLongitude(g.longitude);
-                setLocationLabel(`${g.latitude.toFixed(5)}, ${g.longitude.toFixed(5)}`);
+                setLocationLabel(g.latitude.toFixed(5) + ', ' + g.longitude.toFixed(5));
             }
         } catch (e: any) {
             showToast(e?.response?.data?.detail ?? 'Failed to load garage.', 'error');
@@ -310,11 +273,7 @@ export default function OwnerAccount() {
                 showToast('Location permission denied. Enable it in Settings.', 'warning');
                 return;
             }
-
-            const loc = await Location.getCurrentPositionAsync({
-                accuracy: Location.Accuracy.High,
-            });
-
+            const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
             const { latitude: lat, longitude: lng } = loc.coords;
             setLatitude(lat);
             setLongitude(lng);
@@ -322,13 +281,11 @@ export default function OwnerAccount() {
             const [place] = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
             if (place) {
                 const parts = [place.name, place.street, place.district, place.city, place.region].filter(Boolean);
-                const fullAddress = parts.join(', ');
-                if (!address.trim()) setAddress(fullAddress);   // auto-fill only if empty
-                setLocationLabel(`${place.city ?? place.district}, ${place.region}`);
+                if (!address.trim()) setAddress(parts.join(', '));
+                setLocationLabel((place.city ?? place.district ?? '') + ', ' + (place.region ?? ''));
             } else {
-                setLocationLabel(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+                setLocationLabel(lat.toFixed(5) + ', ' + lng.toFixed(5));
             }
-
             showToast('Location updated successfully.', 'success');
         } catch {
             showToast('Could not fetch location. Try again.', 'error');
@@ -337,10 +294,11 @@ export default function OwnerAccount() {
         }
     };
 
-
-
     const saveProfile = async () => {
-        if (!name.trim() || !phone.trim()) { showToast('Name and phone cannot be empty.', 'error'); return; }
+        if (!name.trim() || !phone.trim()) {
+            showToast('Name and phone cannot be empty.', 'error');
+            return;
+        }
         setSaving(true);
         setUser({ ...user!, name: name.trim(), phone: phone.trim() });
         setEditProfile(false);
@@ -348,17 +306,6 @@ export default function OwnerAccount() {
         showToast('Profile updated successfully.', 'success');
     };
 
-    // const saveGarageInfo = async () => {
-    //     if (!garage) { showToast('Garage not found. Please restart.', 'error'); return; }
-    //     if (!garageName.trim()) { showToast('Garage name cannot be empty.', 'error'); return; }
-    //     setSaving(true);
-    //     const updated = { ...garage, name: garageName.trim(), address: address.trim(), phone: garagePhone.trim() };
-    //     await saveGarageById(updated);
-    //     setGarage(updated);
-    //     setEditGarage(false);
-    //     setSaving(false);
-    //     showToast('Garage info updated.', 'success');
-    // };
     const saveGarageInfo = async () => {
         if (!garageName.trim()) {
             showToast('Garage name cannot be empty.', 'error');
@@ -370,45 +317,14 @@ export default function OwnerAccount() {
                 name: garageName.trim(),
                 address: address.trim(),
                 phone: garagePhone.trim(),
-                latitude: latitude ?? undefined,   // ← add
-                longitude: longitude ?? undefined,   // ← add
+                latitude: latitude ?? undefined,
+                longitude: longitude ?? undefined,
             });
             setGarage(updated);
             setEditGarage(false);
             showToast('Garage info updated.', 'success');
         } catch (e: any) {
             showToast(e?.response?.data?.detail ?? 'Failed to update garage.', 'error');
-        } finally {
-            setSaving(false);
-        }
-    };
-
-
-    // const saveServices = async () => {
-    //     if (!garage) { showToast('Garage not found. Please restart.', 'error'); return; }
-    //     setSaving(true);
-    //     const updated = { ...garage, services: { bike: bikeServices, scooty: scootyServices } };
-    //     await saveGarageById(updated);
-    //     setGarage(updated);
-    //     setEditServices(false);
-    //     setSaving(false);
-    //     showToast(`${bikeServices.length + scootyServices.length} services saved.`, 'success');
-    // };
-    const saveServices = async () => {
-        setSaving(true);
-        try {
-            const updated = await updateGarageServices(garage?.id, {
-                bike_services: bikeServices,
-                scooty_services: scootyServices,
-            });
-            setGarage(updated);
-            setEditServices(false);
-            showToast(
-                `${bikeServices.length + scootyServices.length} services saved.`,
-                'success'
-            );
-        } catch (e: any) {
-            showToast(e?.response?.data?.detail ?? 'Failed to save services.', 'error');
         } finally {
             setSaving(false);
         }
@@ -424,225 +340,239 @@ export default function OwnerAccount() {
 
     if (loading) return <ActivityIndicator style={{ flex: 1 }} color={Colors.primary} />;
 
+    const totalServices = bikeServices.length + scootyServices.length;
+
     return (
         <View style={{ flex: 1 }}>
             <ScrollView style={styles.container} contentContainerStyle={styles.content}>
 
                 {/* Header */}
                 <View style={styles.header}>
-                    <Text style={styles.title}>Account</Text>
+                    <Text style={styles.title}>{'Account'}</Text>
                 </View>
 
                 {/* Avatar card */}
                 <View style={styles.profileCard}>
                     <View style={styles.avatarBox}>
-                        <Text style={styles.avatarText}>{user?.name?.charAt(0).toUpperCase()}</Text>
+                        <Text style={styles.avatarText}>
+                            {user?.name?.charAt(0).toUpperCase() ?? '?'}
+                        </Text>
                     </View>
                     <View style={styles.profileInfo}>
-                        <Text style={styles.profileName}>{user?.name}</Text>
-                        <Text style={styles.profileEmail}>{user?.email}</Text>
+                        <Text style={styles.profileName}>{user?.name ?? ''}</Text>
+                        <Text style={styles.profileEmail}>{user?.email ?? ''}</Text>
                         <View style={styles.roleBadge}>
-                            <Text style={styles.roleBadgeText}>Garage Owner</Text>
+                            <Text style={styles.roleBadgeText}>{'Garage Owner'}</Text>
                         </View>
                     </View>
                 </View>
 
                 {/* Personal Info */}
                 <SectionCard
-                    title="Personal Info" icon="person-outline"
-                    editing={editProfile} saving={saving}
+                    title="Personal Info"
+                    icon="person-outline"
+                    editing={editProfile}
+                    saving={saving}
                     onEdit={() => setEditProfile(true)}
                     onSave={saveProfile}
-                    onCancel={() => { setName(user!.name); setPhone(user!.phone ?? ''); setEditProfile(false); }}
+                    onCancel={() => {
+                        setName(user!.name);
+                        setPhone(user!.phone ?? '');
+                        setEditProfile(false);
+                    }}
                 >
-                    <InfoField label="Full Name" value={name} editing={editProfile} onChangeText={setName} />
-                    <InfoField label="Phone Number" value={phone} editing={editProfile} onChangeText={setPhone} keyboardType="phone-pad" isLast />
+                    <InfoField
+                        label="Full Name"
+                        value={name}
+                        editing={editProfile}
+                        onChangeText={setName}
+                    />
+                    <InfoField
+                        label="Phone Number"
+                        value={phone}
+                        editing={editProfile}
+                        onChangeText={setPhone}
+                        keyboardType="phone-pad"
+                        isLast
+                    />
                 </SectionCard>
 
                 {/* Garage Info */}
                 <SectionCard
-                    title="Garage Info" icon="storefront-outline"
-                    editing={editGarage} saving={saving}
+                    title="Garage Info"
+                    icon="storefront-outline"
+                    editing={editGarage}
+                    saving={saving}
                     onEdit={() => setEditGarage(true)}
                     onSave={saveGarageInfo}
-                    onCancel={() => { setGarageName(garage!.name); setAddress(garage!.address); setGaragePhone(garage!.phone); setEditGarage(false); }}
+                    onCancel={() => {
+                        setGarageName(garage!.name);
+                        setAddress(garage!.address);
+                        setGaragePhone(garage!.phone);
+                        setEditGarage(false);
+                    }}
                 >
                     <InfoField label="Garage Name" value={garageName} editing={editGarage} onChangeText={setGarageName} />
                     <InfoField label="Address" value={address} editing={editGarage} onChangeText={setAddress} multiline />
-                    <InfoField label="Phone" value={garagePhone} editing={editGarage} onChangeText={setGaragePhone} keyboardType="phone-pad" isLast />
+                    <InfoField label="Phone" value={garagePhone} editing={editGarage} onChangeText={setGaragePhone} keyboardType="phone-pad" isLast={!editGarage} />
+
+                    {/* Location picker — only visible while editing */}
                     {editGarage && (
-                        <View style={styles.card}>
-                            <Text style={styles.cardTitle}>Garage Details</Text>
+                        <View style={styles.locationSection}>
+                            <Text style={styles.locationFieldLabel}>{'Garage Location (GPS)'}</Text>
 
-                            {/* ... existing name, address, phone fields ... */}
-
-                            {/* ── Location Picker ───────────────────────────────────── */}
-                            <View style={styles.locationSection}>
-                                <Text style={styles.locationFieldLabel}>Garage Location (GPS)</Text>
-
-                                {latitude && longitude ? (
-                                    // ── Captured state ──────────────────────────────────
-                                    <View style={styles.locationCaptured}>
-                                        <View style={styles.locationCapturedLeft}>
-                                            <View style={styles.locationDot} />
-                                            <View>
-                                                <Text style={styles.locationCapturedTitle}>Location Set</Text>
-                                                <Text style={styles.locationCapturedSub}>{locationLabel}</Text>
-                                                <Text style={styles.locationCoords}>
-                                                    {latitude.toFixed(5)}, {longitude.toFixed(5)}
-                                                </Text>
-                                            </View>
+                            {latitude && longitude ? (
+                                <View style={styles.locationCaptured}>
+                                    <View style={styles.locationCapturedLeft}>
+                                        <View style={styles.locationDot} />
+                                        <View>
+                                            <Text style={styles.locationCapturedTitle}>{'Location Set'}</Text>
+                                            <Text style={styles.locationCapturedSub}>{locationLabel}</Text>
+                                            <Text style={styles.locationCoords}>
+                                                {latitude.toFixed(5) + ', ' + longitude.toFixed(5)}
+                                            </Text>
                                         </View>
-                                        <TouchableOpacity
-                                            style={styles.refetchBtn}
-                                            onPress={handleFetchLocation}
-                                            disabled={fetchingLocation}
-                                        >
-                                            {fetchingLocation
-                                                ? <ActivityIndicator size="small" color={Colors.primary} />
-                                                : <Ionicons name="refresh-outline" size={16} color={Colors.primary} />
-                                            }
-                                        </TouchableOpacity>
                                     </View>
-                                ) : (
-                                    // ── Empty state ──────────────────────────────────────
                                     <TouchableOpacity
-                                        style={[styles.fetchBtn, fetchingLocation && styles.fetchBtnDisabled]}
+                                        style={styles.refetchBtn}
                                         onPress={handleFetchLocation}
                                         disabled={fetchingLocation}
-                                        activeOpacity={0.85}
                                     >
-                                        {fetchingLocation ? (
-                                            <>
-                                                <ActivityIndicator size="small" color={Colors.primary} />
-                                                <Text style={styles.fetchBtnText}>Fetching location...</Text>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Ionicons name="navigate-outline" size={18} color={Colors.primary} />
-                                                <Text style={styles.fetchBtnText}>Update Current Location</Text>
-                                            </>
-                                        )}
+                                        {fetchingLocation
+                                            ? <ActivityIndicator size="small" color={Colors.primary} />
+                                            : <Ionicons name="refresh-outline" size={16} color={Colors.primary} />
+                                        }
                                     </TouchableOpacity>
-                                )}
+                                </View>
+                            ) : (
+                                <TouchableOpacity
+                                    style={[styles.fetchBtn, fetchingLocation && styles.fetchBtnDisabled]}
+                                    onPress={handleFetchLocation}
+                                    disabled={fetchingLocation}
+                                    activeOpacity={0.85}
+                                >
+                                    {fetchingLocation ? (
+                                        <>
+                                            <ActivityIndicator size="small" color={Colors.primary} />
+                                            <Text style={styles.fetchBtnText}>{'Fetching location...'}</Text>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Ionicons name="navigate-outline" size={18} color={Colors.primary} />
+                                            <Text style={styles.fetchBtnText}>{'Update Current Location'}</Text>
+                                        </>
+                                    )}
+                                </TouchableOpacity>
+                            )}
 
-                                <Text style={styles.locationHint}>
-                                    Updating location helps customers find your garage by distance.
-                                </Text>
-                            </View>
-
-                            {/* Save / Cancel buttons stay here unchanged */}
+                            <Text style={styles.locationHint}>
+                                {'Updating location helps customers find your garage by distance.'}
+                            </Text>
                         </View>
                     )}
-
                 </SectionCard>
 
-                {/* Services */}
-                <SectionCard
-                    title="Services Offered" icon="construct-outline"
-                    editing={editServices} saving={saving}
-                    onEdit={() => setEditServices(true)}
-                    onSave={saveServices}
-                    onCancel={() => {
-                        setBikeServices(garage?.services?.bike ?? []);
-                        setScootyServices(garage?.services?.scooty ?? []);
-                        setEditServices(false);
-                    }}
-                >
-                    {/* Bike */}
-                    <View style={styles.serviceSection}>
-                        <View style={styles.serviceSectionHeader}>
-                            <View style={[styles.serviceTypeIcon, { backgroundColor: Colors.infoLight }]}>
-                                <Ionicons name="bicycle-outline" size={14} color={Colors.info} />
-                            </View>
-                            <Text style={styles.serviceTypeLabel}>Bike Services</Text>
-                            <Text style={styles.serviceTypeCount}>{bikeServices.length}</Text>
-                            {editServices ? (
-                                <TouchableOpacity style={styles.pickBtn} onPress={() => setBikePickerOpen(true)}>
-                                    <Ionicons name="add-circle-outline" size={16} color={Colors.primary} />
-                                    <Text style={styles.pickBtnText}>Select</Text>
-                                </TouchableOpacity>
-                            ) : null}
+                {/* Services Offered — navigates to dedicated edit-services page */}
+                <View style={cardStyles.wrap}>
+                    <View style={cardStyles.header}>
+                        <View style={cardStyles.iconBox}>
+                            <Ionicons name="construct-outline" size={16} color={Colors.textSecondary} />
                         </View>
-                        <View style={styles.chipsWrap}>
-                            {bikeServices.length === 0 ? (
-                                <Text style={styles.noServicesText}>No bike services added yet.</Text>
-                            ) : (
-                                bikeServices.map((s) => (
-                                    <View key={s} style={[styles.chip, { backgroundColor: Colors.infoLight }]}>
-                                        <Text style={[styles.chipText, { color: Colors.info }]}>{s}</Text>
-                                        {editServices ? (
-                                            <TouchableOpacity onPress={() => setBikeServices((p) => p.filter((x) => x !== s))}>
-                                                <Ionicons name="close" size={12} color={Colors.info} />
-                                            </TouchableOpacity>
-                                        ) : null}
-                                    </View>
-                                ))
-                            )}
-                        </View>
+                        <Text style={cardStyles.title}>{'Services Offered'}</Text>
+                        <TouchableOpacity
+                            style={cardStyles.editBtn}
+                            onPress={() => router.push('/(owner)/edit-services' as any)}
+                        >
+                            <Ionicons name="pencil-outline" size={15} color={Colors.primary} />
+                            <Text style={cardStyles.editBtnText}>{'Manage'}</Text>
+                        </TouchableOpacity>
                     </View>
+                    <View style={cardStyles.divider} />
+                    <View style={cardStyles.body}>
 
-                    <View style={styles.divider} />
-
-                    {/* Scooty */}
-                    <View style={[styles.serviceSection, { paddingBottom: 0 }]}>
-                        <View style={styles.serviceSectionHeader}>
-                            <View style={[styles.serviceTypeIcon, { backgroundColor: '#F5F3FF' }]}>
-                                <Ionicons name="speedometer-outline" size={14} color="#6D28D9" />
+                        {/* Bike chips preview */}
+                        <View style={styles.serviceSection}>
+                            <View style={styles.serviceSectionHeader}>
+                                <View style={[styles.serviceTypeIcon, { backgroundColor: Colors.infoLight }]}>
+                                    <Ionicons name="bicycle-outline" size={14} color={Colors.info} />
+                                </View>
+                                <Text style={styles.serviceTypeLabel}>{'Bike Services'}</Text>
+                                <Text style={styles.serviceTypeCount}>{String(bikeServices.length)}</Text>
                             </View>
-                            <Text style={styles.serviceTypeLabel}>Scooty Services</Text>
-                            <Text style={styles.serviceTypeCount}>{scootyServices.length}</Text>
-                            {editServices ? (
-                                <TouchableOpacity style={styles.pickBtn} onPress={() => setScootyPickerOpen(true)}>
-                                    <Ionicons name="add-circle-outline" size={16} color={Colors.primary} />
-                                    <Text style={styles.pickBtnText}>Select</Text>
-                                </TouchableOpacity>
-                            ) : null}
-                        </View>
-                        <View style={styles.chipsWrap}>
-                            {scootyServices.length === 0 ? (
-                                <Text style={styles.noServicesText}>No scooty services added yet.</Text>
-                            ) : (
-                                scootyServices.map((s) => (
-                                    <View key={s} style={[styles.chip, { backgroundColor: '#F5F3FF' }]}>
-                                        <Text style={[styles.chipText, { color: '#6D28D9' }]}>{s}</Text>
-                                        {editServices ? (
-                                            <TouchableOpacity onPress={() => setScootyServices((p) => p.filter((x) => x !== s))}>
-                                                <Ionicons name="close" size={12} color="#6D28D9" />
-                                            </TouchableOpacity>
-                                        ) : null}
+                            <View style={styles.chipsWrap}>
+                                {bikeServices.length === 0 ? (
+                                    <Text style={styles.noServicesText}>{'No bike services added yet.'}</Text>
+                                ) : (
+                                    bikeServices.slice(0, 6).map((s) => (
+                                        <View key={s} style={[styles.chip, { backgroundColor: Colors.infoLight }]}>
+                                            <Text style={[styles.chipText, { color: Colors.info }]}>{s}</Text>
+                                        </View>
+                                    ))
+                                )}
+                                {bikeServices.length > 6 && (
+                                    <View style={[styles.chip, { backgroundColor: Colors.surfaceAlt }]}>
+                                        <Text style={[styles.chipText, { color: Colors.textSecondary }]}>
+                                            {'+' + String(bikeServices.length - 6) + ' more'}
+                                        </Text>
                                     </View>
-                                ))
-                            )}
+                                )}
+                            </View>
                         </View>
+
+                        <View style={styles.divider} />
+
+                        {/* Scooty chips preview */}
+                        <View style={[styles.serviceSection, { paddingBottom: 0 }]}>
+                            <View style={styles.serviceSectionHeader}>
+                                <View style={[styles.serviceTypeIcon, { backgroundColor: '#F5F3FF' }]}>
+                                    <Ionicons name="speedometer-outline" size={14} color="#6D28D9" />
+                                </View>
+                                <Text style={styles.serviceTypeLabel}>{'Scooty Services'}</Text>
+                                <Text style={styles.serviceTypeCount}>{String(scootyServices.length)}</Text>
+                            </View>
+                            <View style={styles.chipsWrap}>
+                                {scootyServices.length === 0 ? (
+                                    <Text style={styles.noServicesText}>{'No scooty services added yet.'}</Text>
+                                ) : (
+                                    scootyServices.slice(0, 6).map((s) => (
+                                        <View key={s} style={[styles.chip, { backgroundColor: '#F5F3FF' }]}>
+                                            <Text style={[styles.chipText, { color: '#6D28D9' }]}>{s}</Text>
+                                        </View>
+                                    ))
+                                )}
+                                {scootyServices.length > 6 && (
+                                    <View style={[styles.chip, { backgroundColor: Colors.surfaceAlt }]}>
+                                        <Text style={[styles.chipText, { color: Colors.textSecondary }]}>
+                                            {'+' + String(scootyServices.length - 6) + ' more'}
+                                        </Text>
+                                    </View>
+                                )}
+                            </View>
+                        </View>
+
+                        {/* Manage button */}
+                        <TouchableOpacity
+                            style={styles.manageServicesBtn}
+                            onPress={() => router.push('/(owner)/edit-services' as any)}
+                            activeOpacity={0.85}
+                        >
+                            <Ionicons name="settings-outline" size={16} color={Colors.primary} />
+                            <Text style={styles.manageServicesBtnText}>
+                                {'Manage Services & Pricing  (' + String(totalServices) + ' active)'}
+                            </Text>
+                            <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
+                        </TouchableOpacity>
+
                     </View>
-                </SectionCard>
+                </View>
 
                 {/* Logout */}
                 <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
                     <Ionicons name="log-out-outline" size={18} color={Colors.error} />
-                    <Text style={styles.logoutText}>Log Out</Text>
+                    <Text style={styles.logoutText}>{'Log Out'}</Text>
                 </TouchableOpacity>
 
             </ScrollView>
-
-            {/* Pickers */}
-            <ServicePickerModal
-                visible={bikePickerOpen}
-                title="Bike Services"
-                catalogue={BIKE_CATALOGUE}
-                selected={bikeServices}
-                onDone={setBikeServices}
-                onClose={() => setBikePickerOpen(false)}
-            />
-            <ServicePickerModal
-                visible={scootyPickerOpen}
-                title="Scooty Services"
-                catalogue={SCOOTY_CATALOGUE}
-                selected={scootyServices}
-                onDone={setScootyServices}
-                onClose={() => setScootyPickerOpen(false)}
-            />
 
             {/* Toast */}
             <Toast
@@ -655,12 +585,9 @@ export default function OwnerAccount() {
     );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
 const cardStyles = StyleSheet.create({
-    // 1. SectionCard wrapper — add marginHorizontal
-    // Inside cardStyles (the shared SectionCard styles):
-    wrap: {
-        backgroundColor: Colors.surface, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border, ...Shadow.sm, overflow: 'hidden', marginHorizontal: Spacing.md,   // ← ADD THIS
-    },
+    wrap: { backgroundColor: Colors.surface, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border, ...Shadow.sm, overflow: 'hidden', marginHorizontal: Spacing.md },
     header: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, padding: Spacing.md },
     iconBox: { width: 32, height: 32, borderRadius: Radius.sm, backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
     title: { ...Typography.h3, color: Colors.textPrimary, flex: 1 },
@@ -673,11 +600,6 @@ const cardStyles = StyleSheet.create({
     cancelText: { ...Typography.buttonSm, color: Colors.textSecondary },
     saveBtn: { flex: 1, padding: Spacing.sm, borderRadius: Radius.md, backgroundColor: Colors.primary, alignItems: 'center' },
     saveText: { ...Typography.buttonSm, color: '#fff' },
-    content: {
-        paddingBottom: 40,
-        gap: Spacing.sm,
-        // no paddingHorizontal here — cards own their horizontal margin
-    },
 });
 
 const fieldStyles = StyleSheet.create({
@@ -692,20 +614,10 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: Colors.bg },
     content: { paddingBottom: 40, gap: Spacing.sm },
 
-    header: {
-        backgroundColor: Colors.surface, paddingHorizontal: Spacing.md,
-        paddingTop: 56, paddingBottom: Spacing.md,
-        borderBottomWidth: 1, borderBottomColor: Colors.borderLight,
-    },
+    header: { backgroundColor: Colors.surface, paddingHorizontal: Spacing.md, paddingTop: 56, paddingBottom: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
     title: { ...Typography.h1, color: Colors.textPrimary },
 
-    profileCard: {
-        flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
-        backgroundColor: Colors.surface,
-        padding: Spacing.md, borderRadius: Radius.lg,
-        borderWidth: 1, borderColor: Colors.border, ...Shadow.sm,
-        marginHorizontal: Spacing.md,
-    },
+    profileCard: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, backgroundColor: Colors.surface, padding: Spacing.md, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border, ...Shadow.sm, marginHorizontal: Spacing.md },
     avatarBox: { width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
     avatarText: { fontSize: 22, fontWeight: '700', color: '#fff' },
     profileInfo: { flex: 1 },
@@ -719,8 +631,6 @@ const styles = StyleSheet.create({
     serviceTypeIcon: { width: 26, height: 26, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
     serviceTypeLabel: { ...Typography.body, color: Colors.textPrimary, fontWeight: '600', flex: 1 },
     serviceTypeCount: { ...Typography.caption, color: Colors.textTertiary, fontWeight: '600' },
-    pickBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: Spacing.sm, paddingVertical: 5, backgroundColor: Colors.primaryLight, borderRadius: Radius.md },
-    pickBtnText: { ...Typography.caption, color: Colors.primary, fontWeight: '600' },
 
     chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
     chip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: Radius.full, paddingHorizontal: Spacing.sm, paddingVertical: 5 },
@@ -728,56 +638,24 @@ const styles = StyleSheet.create({
     noServicesText: { ...Typography.caption, color: Colors.textTertiary, fontStyle: 'italic' },
     divider: { height: 1, backgroundColor: Colors.borderLight },
 
-    logoutBtn: {
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm,
-        backgroundColor: Colors.errorLight, padding: Spacing.md, borderRadius: Radius.lg,
-        borderWidth: 1, borderColor: '#FECACA', marginHorizontal: Spacing.md,
-    },
-    logoutText: { ...Typography.button, color: Colors.error },
-    locationSection: { gap: Spacing.sm, marginTop: Spacing.xs },
-    locationFieldLabel: { ...Typography.caption, color: Colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.6 },
+    manageServicesBtn: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: Spacing.md, backgroundColor: Colors.primaryLight, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: Colors.primary + '40' },
+    manageServicesBtnText: { ...Typography.body, color: Colors.primary, fontWeight: '600', flex: 1 },
 
-    fetchBtn: {
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-        gap: Spacing.sm, padding: Spacing.md, borderRadius: Radius.md,
-        borderWidth: 1.5, borderColor: Colors.primary,
-        borderStyle: 'dashed', backgroundColor: Colors.primaryLight,
-    },
+    logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, backgroundColor: Colors.errorLight, padding: Spacing.md, borderRadius: Radius.lg, borderWidth: 1, borderColor: '#FECACA', marginHorizontal: Spacing.md },
+    logoutText: { ...Typography.button, color: Colors.error },
+
+    // Location
+    locationSection: { gap: Spacing.sm, marginTop: Spacing.md },
+    locationFieldLabel: { ...Typography.caption, color: Colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.6 },
+    fetchBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, padding: Spacing.md, borderRadius: Radius.md, borderWidth: 1.5, borderColor: Colors.primary, borderStyle: 'dashed', backgroundColor: Colors.primaryLight },
     fetchBtnDisabled: { opacity: 0.6 },
     fetchBtnText: { ...Typography.body, color: Colors.primary, fontWeight: '600' },
-
-    locationCaptured: {
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        backgroundColor: Colors.successLight, borderRadius: Radius.md,
-        padding: Spacing.md, borderWidth: 1, borderColor: '#BBF7D0',
-    },
+    locationCaptured: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.successLight, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: '#BBF7D0' },
     locationCapturedLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, flex: 1 },
     locationDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.success },
     locationCapturedTitle: { ...Typography.body, color: Colors.success, fontWeight: '700' },
     locationCapturedSub: { ...Typography.caption, color: '#065F46', marginTop: 2 },
     locationCoords: { ...Typography.overline, color: '#065F46', marginTop: 2 },
-
-    refetchBtn: {
-        width: 34, height: 34, borderRadius: Radius.sm,
-        backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center',
-        borderWidth: 1, borderColor: Colors.primary,
-    },
+    refetchBtn: { width: 34, height: 34, borderRadius: Radius.sm, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.primary },
     locationHint: { ...Typography.caption, color: Colors.textTertiary, fontStyle: 'italic' },
-
-    card: {
-        backgroundColor: Colors.surface, borderRadius: Radius.lg,
-        borderWidth: 1, borderColor: Colors.border,
-        padding: Spacing.md, gap: Spacing.sm, ...Shadow.sm,
-    },
-    cardTitle: {
-        ...Typography.caption, color: Colors.textTertiary,
-        textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 4,
-    },
-    fieldRow: {
-        flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
-        backgroundColor: Colors.bg, borderRadius: Radius.md,
-        paddingHorizontal: Spacing.md, paddingVertical: 13,
-        borderWidth: 1, borderColor: Colors.border,
-    },
-    fieldInput: { ...Typography.body, flex: 1, color: Colors.textPrimary },
 });

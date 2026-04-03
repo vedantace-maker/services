@@ -7,10 +7,14 @@ import {
 import { useAuthStore } from '../store/authStore';
 import { getStoredUser } from '../utils/dummyAuth';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { CartProvider } from '../context/CartContext';
+import { useNotifications } from '../hooks/useNotifications';
 
 const { height } = Dimensions.get('window');
+;
 
 export default function RootLayout() {
+  useNotifications();
   const { user, setUser } = useAuthStore();
   const [initialized, setInitialized] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
@@ -61,26 +65,28 @@ export default function RootLayout() {
   }
 
   return (
-    <SafeAreaProvider>
-      <View style={{ flex: 1 }}>
-        {/* App content always renders underneath */}
-        <Slot />
+    <CartProvider>
+      <SafeAreaProvider>
+        <View style={{ flex: 1 }}>
+          {/* App content always renders underneath */}
+          <Slot />
 
-        {/* Welcome overlay slides away on every app open */}
-        {showWelcome ? (
-          <Animated.View
-            style={[
-              styles.overlay,
-              { transform: [{ translateY: slideAnim }] }
-            ]}
-          >
-            <StatusBar barStyle="light-content" backgroundColor="#FF6B35" />
-            <Text style={styles.brand}>MOTOBEE</Text>
-            <Text style={styles.tagline}>Your Bike. Our Care.</Text>
-          </Animated.View>
-        ) : null}
-      </View>
-    </SafeAreaProvider>
+          {/* Welcome overlay slides away on every app open */}
+          {showWelcome ? (
+            <Animated.View
+              style={[
+                styles.overlay,
+                { transform: [{ translateY: slideAnim }] }
+              ]}
+            >
+              <StatusBar barStyle="light-content" backgroundColor="#FF6B35" />
+              <Text style={styles.brand}>MOTOBEE</Text>
+              <Text style={styles.tagline}>Your Bike. Our Care.</Text>
+            </Animated.View>
+          ) : null}
+        </View>
+      </SafeAreaProvider>
+    </CartProvider>
   );
 }
 

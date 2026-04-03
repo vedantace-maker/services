@@ -24,10 +24,12 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.vedant.ace.autoservices"
+      "package": "com.vedant.ace.autoservices",
+      "googleServicesFile": "./google-services.json"
     },
     "plugins": [
       "expo-router",
+      "expo-notifications",
       [
         "expo-splash-screen",
         {
@@ -46,7 +48,9 @@
         {
           "locationWhenInUsePermission": "Allow GarageApp to use your location to set your garage address."
         }
-      ]
+      ],
+      // "@react-native-firebase/app",
+      // "@react-native-firebase/messaging"
     ],
     "experiments": {
       "typedRoutes": true,

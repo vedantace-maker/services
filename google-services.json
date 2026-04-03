@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "879435047629",
+    "project_id": "auto-services-588d7",
+    "storage_bucket": "auto-services-588d7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:879435047629:android:b4693f4ffb719eea6dff84",
+        "android_client_info": {
+          "package_name": "com.vedant.ace.autoservices"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAOGNXskkPv99rdDJWGe_0z8IAZwkeMDro"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

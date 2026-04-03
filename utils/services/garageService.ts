@@ -85,3 +85,62 @@ export async function updateGarageSchedule(
     const { data } = await api.patch(`/garages/${garageId}/schedule/`, { schedule });
     return data;
 }
+
+// garageService.ts — fix the endpoint
+// export async function updateGarageServicesWithPricing(garageId: any, payload: { ... }) {
+//     const { data } = await api.patch(`/garages/mine/`, {  // ✅ use mine/
+//         services: {
+//             bike: payload.bike_services,
+//             scooty: payload.scooty_services,
+//         },
+//         service_prices: payload.service_prices,
+//     });
+//     return data;
+// }
+
+// Add this to your existing garageService.ts
+
+export async function updateGarageServicesWithPricing(
+    garageId: any,  
+    payload: {
+        bike_services: string[];
+        scooty_services: string[];
+        service_prices: {
+            bike: Record<string, number>;
+            scooty: Record<string, number>;
+        };
+    }
+) {
+    const { data } = await api.patch(`/garages/${garageId}/`, { 
+        services: {
+            bike: payload.bike_services,
+            scooty: payload.scooty_services,
+        },
+        service_prices: payload.service_prices,
+    });
+    return data;
+}
+
+
+
+/////////////////////////// with mine
+// export async function updateGarageServicesWithPricing(
+//     garageId: any,
+//     payload: {
+//         bike_services: string[];
+//         scooty_services: string[];
+//         service_prices: {
+//             bike: Record<string, number>;
+//             scooty: Record<string, number>;
+//         };
+//     }
+// ): Promise<Garage> {
+//     const { data } = await api.patch(`/garages/mine/`, {
+//         services: {
+//             bike: payload.bike_services,
+//             scooty: payload.scooty_services,
+//         },
+//         service_prices: payload.service_prices,
+//     });
+//     return data;
+// }

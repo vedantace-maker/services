@@ -45,6 +45,10 @@ export type Garage = {
         bike?: string[];
         scooty?: string[];
     };
+    service_prices?: {
+        bike: Record<string, number>;
+        scooty: Record<string, number>;
+    };
     schedule?: DaySchedule[];   // ← comes nested from Django
 };
 
@@ -59,22 +63,27 @@ export type BookingStatus =
     | 'completed'
     | 'cancelled';
 
-export interface Booking {
-    id: string;
-    customerUid: string;
-    customerName: string;
-    garageId: string;
-    garageName: string;
-    date: string;
-    time: string;
+
+export type Booking = {
+    id: number;
+    customer: string;
+    customer_name: string;
+    customer_phone: string;
+    garage: string;      // UUID
+    garage_name: string;
+    garage_address: string;
+    garage_phone: string;
+    date: string;      // "2026-03-20"
+    time: string;      // "09:00"   ← was time_slot
+    vehicle_type: 'bike' | 'scooty';
+    bike_details: string;      // vehicle model  ← was service
+    selected_services: string;      // service name
     status: BookingStatus;
-    createdAt: number;
-    bikeDetails?: string;
-    serviceStartedAt?: number;
-    estimatedDurationMin?: number;
-    completedAt?: number;
-    rejectionNote?: string;
-}
+    note?: string;
+    rejection_note?: string;
+    created_at: string;
+    updated_at: string;
+};
 
 // export interface DaySchedule {
 //     day: string;
