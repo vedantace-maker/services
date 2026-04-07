@@ -1,3 +1,5 @@
+// app/(auth)/register.tsx
+
 import React, { useState } from 'react';
 import {
     View, Text, StyleSheet, TextInput,
@@ -17,7 +19,7 @@ type Role = 'customer' | 'owner';
 
 export default function RegisterScreen() {
     const router = useRouter();
-    const setUser = useAuthStore((s) => s.setUser);
+    const { setAuth } = useAuthStore();          // ← was setUser, now setAuth
     const { toast, showToast, hideToast } = useToast();
 
     // ── Common fields ─────────────────────────────────────────────────
@@ -60,28 +62,21 @@ export default function RegisterScreen() {
             setLatitude(lat);
             setLongitude(lng);
 
-            // Reverse geocode to fill address field automatically
             const [place] = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
             if (place) {
                 const parts = [
-                    place.name,
-                    place.street,
-                    place.district,
-                    place.city,
-                    place.region,
+                    place.name, place.street, place.district, place.city, place.region,
                 ].filter(Boolean);
 
                 const fullAddress = parts.join(', ');
-                if (!garageAddress.trim()) {
-                    setGarageAddress(fullAddress);   // auto-fill only if empty
-                }
+                if (!garageAddress.trim()) setGarageAddress(fullAddress);
                 setLocationLabel(`${place.city ?? place.district}, ${place.region}`);
             } else {
                 setLocationLabel(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
             }
 
             showToast('Location captured successfully.', 'success');
-        } catch (e: any) {
+        } catch {
             showToast('Could not fetch location. Try again.', 'error');
         } finally {
             setFetchingLocation(false);
@@ -93,16 +88,13 @@ export default function RegisterScreen() {
         if (!name.trim()) return 'Full name is required.';
         if (!email.trim()) return 'Email is required.';
         if (!phone.trim()) return 'Phone number is required.';
-        if (password.length < 8)
-            return 'Password must be at least 8 characters.';
-        if (password !== confirm)
-            return 'Passwords do not match.';
+        if (password.length < 8) return 'Password must be at least 8 characters.';
+        if (password !== confirm) return 'Passwords do not match.';
         if (role === 'owner') {
             if (!garageName.trim()) return 'Garage name is required.';
             if (!garageAddress.trim()) return 'Garage address is required.';
             if (!garagePhone.trim()) return 'Garage phone is required.';
-            if (!latitude || !longitude)
-                return 'Please fetch your garage location.';
+            if (!latitude || !longitude) return 'Please fetch your garage location.';
         }
         return null;
     };
@@ -114,8 +106,10 @@ export default function RegisterScreen() {
 
         setLoading(true);
         try {
-            const { user } = await registerUser(name, email, phone, password, role);
+            // registerUser saves access + refresh + user to SecureStore internally
+            const res = await registerUser(name, email, phone, password, role);
 
+            // Create garage profile for owner before redirecting
             if (role === 'owner') {
                 try {
                     await createGarage({
@@ -129,13 +123,20 @@ export default function RegisterScreen() {
                     const msg =
                         garageErr?.response?.data?.detail ??
                         garageErr?.response?.data?.non_field_errors?.[0] ??
-                        'Garage setup failed. Please update in Account.';
+                        'Garage setup failed. You can update it in Account settings.';
                     showToast(msg, 'warning');
-                    console.error('createGarage failed:', garageErr?.response?.data);
                 }
             }
 
-            setUser(user!);
+            // ✅ token comes from res.token, NOT res.user.token
+            setAuth(res.token ?? '', res.user!);
+
+            // Redirect based on role
+            if (role === 'owner') {
+                router.replace('/(owner)' as any);
+            } else {
+                router.replace('/(customer)/home' as any);
+            }
         } catch (e: any) {
             const msg =
                 e?.response?.data?.email?.[0] ??
@@ -157,8 +158,8 @@ export default function RegisterScreen() {
             >
                 {/* Header */}
                 <View style={styles.header}>
-                    <Text style={styles.title}>Create Account</Text>
-                    <Text style={styles.subtitle}>Fill in your details to get started</Text>
+                    <Text style={styles.title}>{'Create Account'}</Text>
+                    <Text style={styles.subtitle}>{'Fill in your details to get started'}</Text>
                 </View>
 
                 {/* Role toggle */}
@@ -183,10 +184,12 @@ export default function RegisterScreen() {
 
                 {/* ── Personal Info ──────────────────────────────────────── */}
                 <View style={styles.card}>
-                    <Text style={styles.cardTitle}>Personal Info</Text>
+                    <Text style={styles.cardTitle}>{'Personal Info'}</Text>
                     <Field icon="person-outline" placeholder="Full name" value={name} onChangeText={setName} />
                     <Field icon="mail-outline" placeholder="Email address" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
                     <Field icon="call-outline" placeholder="Phone number" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+
+                    {/* Password with show/hide toggle */}
                     <View style={styles.fieldRow}>
                         <Ionicons name="lock-closed-outline" size={18} color={Colors.textTertiary} />
                         <TextInput
@@ -206,18 +209,19 @@ export default function RegisterScreen() {
                             />
                         </TouchableOpacity>
                     </View>
+
                     <Field icon="lock-closed-outline" placeholder="Confirm password" value={confirm} onChangeText={setConfirm} secureTextEntry autoCapitalize="none" />
                 </View>
 
                 {/* ── Garage Info (owner only) ───────────────────────────── */}
                 {role === 'owner' && (
                     <View style={styles.card}>
-                        <Text style={styles.cardTitle}>Garage Details</Text>
+                        <Text style={styles.cardTitle}>{'Garage Details'}</Text>
 
                         <View style={styles.garageNote}>
                             <Ionicons name="information-circle-outline" size={15} color="#92400E" />
                             <Text style={styles.garageNoteText}>
-                                These details will be visible to customers when browsing.
+                                {'These details will be visible to customers when browsing.'}
                             </Text>
                         </View>
 
@@ -227,22 +231,20 @@ export default function RegisterScreen() {
 
                         {/* ── Location picker ───────────────────────────────── */}
                         <View style={styles.locationSection}>
-                            <Text style={styles.locationLabel}>Garage Location (GPS)</Text>
+                            <Text style={styles.locationLabel}>{'Garage Location (GPS)'}</Text>
 
-                            {/* Captured badge */}
                             {latitude && longitude ? (
                                 <View style={styles.locationCaptured}>
                                     <View style={styles.locationCapturedLeft}>
                                         <View style={styles.locationDot} />
                                         <View>
-                                            <Text style={styles.locationCapturedTitle}>Location Captured</Text>
+                                            <Text style={styles.locationCapturedTitle}>{'Location Captured'}</Text>
                                             <Text style={styles.locationCapturedSub}>{locationLabel}</Text>
                                             <Text style={styles.locationCoords}>
-                                                {latitude.toFixed(5)}, {longitude.toFixed(5)}
+                                                {latitude.toFixed(5) + ', ' + longitude.toFixed(5)}
                                             </Text>
                                         </View>
                                     </View>
-                                    {/* Re-fetch button */}
                                     <TouchableOpacity
                                         style={styles.refetchBtn}
                                         onPress={handleFetchLocation}
@@ -252,7 +254,6 @@ export default function RegisterScreen() {
                                     </TouchableOpacity>
                                 </View>
                             ) : (
-                                /* Fetch button — shown when no location yet */
                                 <TouchableOpacity
                                     style={[styles.fetchBtn, fetchingLocation && styles.fetchBtnDisabled]}
                                     onPress={handleFetchLocation}
@@ -262,19 +263,19 @@ export default function RegisterScreen() {
                                     {fetchingLocation ? (
                                         <>
                                             <ActivityIndicator size="small" color={Colors.primary} />
-                                            <Text style={styles.fetchBtnText}>Fetching location...</Text>
+                                            <Text style={styles.fetchBtnText}>{'Fetching location...'}</Text>
                                         </>
                                     ) : (
                                         <>
                                             <Ionicons name="navigate-outline" size={18} color={Colors.primary} />
-                                            <Text style={styles.fetchBtnText}>Use My Current Location</Text>
+                                            <Text style={styles.fetchBtnText}>{'Use My Current Location'}</Text>
                                         </>
                                     )}
                                 </TouchableOpacity>
                             )}
 
                             <Text style={styles.locationHint}>
-                                Your GPS coordinates help customers find you on the map and sort garages by distance.
+                                {'Your GPS coordinates help customers find you on the map and sort garages by distance.'}
                             </Text>
                         </View>
                     </View>
@@ -291,7 +292,7 @@ export default function RegisterScreen() {
                         <ActivityIndicator color="#fff" />
                     ) : (
                         <>
-                            <Text style={styles.submitBtnText}>Create Account</Text>
+                            <Text style={styles.submitBtnText}>{'Create Account'}</Text>
                             <Ionicons name="arrow-forward" size={18} color="#fff" />
                         </>
                     )}
@@ -299,9 +300,9 @@ export default function RegisterScreen() {
 
                 {/* Login link */}
                 <View style={styles.loginRow}>
-                    <Text style={styles.loginText}>Already have an account?</Text>
-                    <TouchableOpacity onPress={() => router.replace('/(auth)/login')}>
-                        <Text style={styles.loginLink}>Sign in</Text>
+                    <Text style={styles.loginText}>{'Already have an account?'}</Text>
+                    <TouchableOpacity onPress={() => router.replace('/(auth)/login' as any)}>
+                        <Text style={styles.loginLink}>{'Sign in'}</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -312,10 +313,15 @@ export default function RegisterScreen() {
     );
 }
 
+// ── Reusable field component ──────────────────────────────────────────────────
 function Field({ icon, placeholder, value, onChangeText, keyboardType, secureTextEntry, autoCapitalize }: {
-    icon: any; placeholder: string; value: string;
+    icon: any;
+    placeholder: string;
+    value: string;
     onChangeText: (v: string) => void;
-    keyboardType?: any; secureTextEntry?: boolean; autoCapitalize?: any;
+    keyboardType?: any;
+    secureTextEntry?: boolean;
+    autoCapitalize?: any;
 }) {
     return (
         <View style={styles.fieldRow}>
@@ -341,77 +347,36 @@ const styles = StyleSheet.create({
     title: { ...Typography.h1, color: Colors.textPrimary },
     subtitle: { ...Typography.body, color: Colors.textTertiary },
 
-    roleToggle: {
-        flexDirection: 'row', gap: Spacing.sm,
-        backgroundColor: Colors.surfaceAlt, borderRadius: Radius.lg, padding: 4,
-    },
+    roleToggle: { flexDirection: 'row', gap: Spacing.sm, backgroundColor: Colors.surfaceAlt, borderRadius: Radius.lg, padding: 4 },
     roleBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.xs, paddingVertical: Spacing.sm, borderRadius: Radius.md },
     roleBtnActive: { backgroundColor: Colors.surface, ...Shadow.sm },
     roleBtnText: { ...Typography.body, color: Colors.textTertiary, fontWeight: '500' },
     roleBtnTextActive: { color: Colors.primary, fontWeight: '700' },
 
-    card: {
-        backgroundColor: Colors.surface, borderRadius: Radius.lg,
-        borderWidth: 1, borderColor: Colors.border,
-        padding: Spacing.md, gap: Spacing.sm, ...Shadow.sm,
-    },
-    cardTitle: {
-        ...Typography.caption, color: Colors.textTertiary,
-        textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 4,
-    },
+    card: { backgroundColor: Colors.surface, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, gap: Spacing.sm, ...Shadow.sm },
+    cardTitle: { ...Typography.caption, color: Colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 4 },
 
-    garageNote: {
-        flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.xs,
-        backgroundColor: Colors.warningLight, borderRadius: Radius.sm,
-        padding: Spacing.sm, borderWidth: 1, borderColor: '#FDE68A',
-    },
+    garageNote: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.xs, backgroundColor: Colors.warningLight, borderRadius: Radius.sm, padding: Spacing.sm, borderWidth: 1, borderColor: '#FDE68A' },
     garageNoteText: { ...Typography.caption, color: '#92400E', flex: 1 },
 
-    fieldRow: {
-        flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
-        backgroundColor: Colors.bg, borderRadius: Radius.md,
-        paddingHorizontal: Spacing.md, paddingVertical: 13,
-        borderWidth: 1, borderColor: Colors.border,
-    },
+    fieldRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.bg, borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: 13, borderWidth: 1, borderColor: Colors.border },
     fieldInput: { ...Typography.body, flex: 1, color: Colors.textPrimary },
 
-    // ── Location ──────────────────────────────────────────────────────
     locationSection: { gap: Spacing.sm },
     locationLabel: { ...Typography.caption, color: Colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.6 },
-
-    fetchBtn: {
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-        gap: Spacing.sm, padding: Spacing.md, borderRadius: Radius.md,
-        borderWidth: 1.5, borderColor: Colors.primary,
-        borderStyle: 'dashed', backgroundColor: Colors.primaryLight,
-    },
+    fetchBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, padding: Spacing.md, borderRadius: Radius.md, borderWidth: 1.5, borderColor: Colors.primary, borderStyle: 'dashed', backgroundColor: Colors.primaryLight },
     fetchBtnDisabled: { opacity: 0.6 },
     fetchBtnText: { ...Typography.body, color: Colors.primary, fontWeight: '600' },
-
-    locationCaptured: {
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        backgroundColor: Colors.successLight, borderRadius: Radius.md,
-        padding: Spacing.md, borderWidth: 1, borderColor: '#BBF7D0',
-    },
+    locationCaptured: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.successLight, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: '#BBF7D0' },
     locationCapturedLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, flex: 1 },
     locationDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.success },
     locationCapturedTitle: { ...Typography.body, color: Colors.success, fontWeight: '700' },
     locationCapturedSub: { ...Typography.caption, color: '#065F46', marginTop: 2 },
-    locationCoords: { ...Typography.overline, color: '#065F46', marginTop: 2 },
-
-    refetchBtn: {
-        width: 34, height: 34, borderRadius: Radius.sm,
-        backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center',
-        borderWidth: 1, borderColor: Colors.primary,
-    },
-
+    locationCoords: { fontSize: 10, color: '#065F46', marginTop: 2, fontWeight: '600' },
+    refetchBtn: { width: 34, height: 34, borderRadius: Radius.sm, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.primary },
     locationHint: { ...Typography.caption, color: Colors.textTertiary, fontStyle: 'italic' },
 
-    submitBtn: {
-        backgroundColor: Colors.primary, borderRadius: Radius.lg,
-        padding: Spacing.md, flexDirection: 'row',
-        alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, marginTop: Spacing.sm,
-    },
+    submitBtn: { backgroundColor: Colors.primary, borderRadius: Radius.lg, padding: Spacing.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, marginTop: Spacing.sm },
     submitBtnDisabled: { backgroundColor: Colors.primary + '80' },
     submitBtnText: { ...Typography.button, color: '#fff' },
 

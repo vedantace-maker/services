@@ -1,20 +1,20 @@
+// app/(customer)/account.tsx
+
 import React, { useState } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity,
-    TextInput, ScrollView, ActivityIndicator
+    TextInput, ScrollView, ActivityIndicator, Alert,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { router } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
 import { logoutUser } from '../../utils/services/authService';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../constants/theme';
 import Toast from '../../components/Toast';
 import { useToast } from '../../hooks/useToast';
-import { router } from 'expo-router';
 
 export default function CustomerAccount() {
-    const user = useAuthStore((s) => s.user);
-    const setUser = useAuthStore((s) => s.setUser);
+    const { user, logout, updateUser } = useAuthStore();   // ✅ no setUser
     const { toast, showToast, hideToast } = useToast();
 
     const [editMode, setEditMode] = useState(false);
@@ -22,15 +22,32 @@ export default function CustomerAccount() {
     const [phone, setPhone] = useState(user?.phone ?? '');
     const [saving, setSaving] = useState(false);
 
+    // ── Logout ────────────────────────────────────────────────────────────────
     const handleLogout = () => {
-        showToast('Logging out...', 'info');
-        setTimeout(async () => {
-            await logoutUser();
-            setUser(null);
-        }, 1000);
+        Alert.alert(
+            'Log Out',
+            'Are you sure you want to log out?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Log Out',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await logoutUser();   // blacklists token on backend
+                        } catch {
+                            // non-critical — still clear local state
+                        } finally {
+                            await logout();       // clears SecureStore + Zustand
+                            // ✅ NO router.replace — _layout AuthGate handles redirect
+                        }
+                    },
+                },
+            ]
+        );
     };
 
-    // ── Open edit — reset fields to current user values ───────────────────────
+    // ── Edit profile ──────────────────────────────────────────────────────────
     const handleOpenEdit = () => {
         setName(user?.name ?? '');
         setPhone(user?.phone ?? '');
@@ -43,6 +60,7 @@ export default function CustomerAccount() {
         setEditMode(false);
     };
 
+    // ── Save profile — updates SecureStore + Zustand via updateUser ───────────
     const handleSave = async () => {
         if (!name.trim() || !phone.trim()) {
             showToast('Name and phone cannot be empty.', 'error');
@@ -50,26 +68,12 @@ export default function CustomerAccount() {
         }
         setSaving(true);
         try {
-            const raw = await AsyncStorage.getItem('@bikeservice_users');
-            const users = raw ? JSON.parse(raw) : [];
-            const idx = users.findIndex((u: any) => u.uid === user!.uid);
-            if (idx >= 0) {
-                users[idx].name = name.trim();
-                users[idx].phone = phone.trim();
-                await AsyncStorage.setItem('@bikeservice_users', JSON.stringify(users));
-            }
-            const currentRaw = await AsyncStorage.getItem('@bikeservice_current_user');
-            if (currentRaw) {
-                const current = JSON.parse(currentRaw);
-                current.name = name.trim();
-                current.phone = phone.trim();
-                await AsyncStorage.setItem('@bikeservice_current_user', JSON.stringify(current));
-            }
-            setUser({ ...user!, name: name.trim(), phone: phone.trim() });
+            // ✅ updateUser patches SecureStore + Zustand — no AsyncStorage needed
+            await updateUser({ name: name.trim(), phone: phone.trim() });
             setEditMode(false);
             showToast('Profile updated successfully.', 'success');
         } catch (e: any) {
-            showToast(e.message ?? 'Failed to update profile.', 'error');
+            showToast(e?.message ?? 'Failed to update profile.', 'error');
         } finally {
             setSaving(false);
         }
@@ -95,7 +99,7 @@ export default function CustomerAccount() {
             title: 'More',
             items: [
                 { icon: 'help-circle-outline' as const, label: 'Help & Support', sub: 'FAQs and contact support', route: null, color: '#7C3AED' },
-                { icon: 'information-circle-outline' as const, label: 'About MotoBee', sub: 'Version 1.0.0', route: '/(customer)/about', color: Colors.textTertiary },
+                { icon: 'information-circle-outline' as const, label: 'About MotoBee', sub: 'Version 1.0.0', route: '/(customer)/about' as any, color: Colors.textTertiary },
             ],
         },
     ];
@@ -108,7 +112,7 @@ export default function CustomerAccount() {
             >
                 {/* ── Header ───────────────────────────────────────────────── */}
                 <View style={styles.header}>
-                    <Text style={styles.title}>Account</Text>
+                    <Text style={styles.title}>{'Account'}</Text>
                 </View>
 
                 {/* ── Profile card ─────────────────────────────────────────── */}
@@ -144,24 +148,20 @@ export default function CustomerAccount() {
                                     <Text style={styles.profileName}>{user?.name}</Text>
                                     <Text style={styles.profileEmail}>{user?.email}</Text>
                                     <View style={styles.roleBadge}>
-                                        <Text style={styles.roleBadgeText}>Customer</Text>
+                                        <Text style={styles.roleBadgeText}>{'Customer'}</Text>
                                     </View>
                                 </>
                             )}
                         </View>
 
-                        {/* Edit icon — only in view mode */}
                         {!editMode && (
-                            <TouchableOpacity
-                                style={styles.editIconBtn}
-                                onPress={handleOpenEdit}     // ← was setEditMode(true)
-                            >
+                            <TouchableOpacity style={styles.editIconBtn} onPress={handleOpenEdit}>
                                 <Ionicons name="pencil-outline" size={18} color={Colors.primary} />
                             </TouchableOpacity>
                         )}
                     </View>
 
-                    {/* ── Save / Cancel buttons — shown only in edit mode ───── */}
+                    {/* ── Save / Cancel — edit mode only ───────────────────── */}
                     {editMode && (
                         <View style={styles.editRow}>
                             <TouchableOpacity
@@ -169,19 +169,17 @@ export default function CustomerAccount() {
                                 onPress={handleCancelEdit}
                                 disabled={saving}
                             >
-                                <Text style={styles.cancelBtnText}>Cancel</Text>
+                                <Text style={styles.cancelBtnText}>{'Cancel'}</Text>
                             </TouchableOpacity>
-
                             <TouchableOpacity
                                 style={[styles.saveBtn, saving && { opacity: 0.7 }]}
                                 onPress={handleSave}
                                 disabled={saving}
                             >
-                                {saving ? (
-                                    <ActivityIndicator color="#fff" size="small" />
-                                ) : (
-                                    <Text style={styles.saveBtnText}>Save Changes</Text>
-                                )}
+                                {saving
+                                    ? <ActivityIndicator color="#fff" size="small" />
+                                    : <Text style={styles.saveBtnText}>{'Save Changes'}</Text>
+                                }
                             </TouchableOpacity>
                         </View>
                     )}
@@ -209,7 +207,9 @@ export default function CustomerAccount() {
                                             </View>
                                             <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
                                         </TouchableOpacity>
-                                        {i < section.items.length - 1 && <View style={styles.menuDivider} />}
+                                        {i < section.items.length - 1 && (
+                                            <View style={styles.menuDivider} />
+                                        )}
                                     </React.Fragment>
                                 ))}
                             </View>
@@ -225,12 +225,11 @@ export default function CustomerAccount() {
                         activeOpacity={0.85}
                     >
                         <Ionicons name="log-out-outline" size={20} color={Colors.error} />
-                        <Text style={styles.logoutText}>Log Out</Text>
+                        <Text style={styles.logoutText}>{'Log Out'}</Text>
                     </TouchableOpacity>
                 </View>
 
-                {/* ── App version ──────────────────────────────────────────── */}
-                <Text style={styles.versionText}>MotoBee v1.0.0</Text>
+                <Text style={styles.versionText}>{'MotoBee v1.0.0'}</Text>
             </ScrollView>
 
             <Toast
@@ -246,28 +245,11 @@ export default function CustomerAccount() {
 const styles = StyleSheet.create({
     scrollContent: { paddingBottom: 40 },
 
-    header: {
-        backgroundColor: Colors.surface, paddingHorizontal: Spacing.md,
-        paddingTop: 56, paddingBottom: Spacing.md,
-        borderBottomWidth: 1, borderBottomColor: Colors.borderLight,
-    },
+    header: { backgroundColor: Colors.surface, paddingHorizontal: Spacing.md, paddingTop: 56, paddingBottom: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
     title: { ...Typography.h1, color: Colors.textPrimary },
 
-    // Profile
-    profileSection: {
-        paddingTop: Spacing.lg,
-        paddingBottom: Spacing.lg,
-        marginBottom: Spacing.md,
-        borderBottomWidth: 2,
-        borderBottomColor: Colors.borderLight,
-        gap: Spacing.sm,
-    },
-    profileCard: {
-        flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
-        backgroundColor: Colors.surface, padding: Spacing.md,
-        borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border,
-        ...Shadow.sm, marginHorizontal: Spacing.md,
-    },
+    profileSection: { paddingTop: Spacing.lg, paddingBottom: Spacing.lg, marginBottom: Spacing.md, borderBottomWidth: 2, borderBottomColor: Colors.borderLight, gap: Spacing.sm },
+    profileCard: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, backgroundColor: Colors.surface, padding: Spacing.md, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border, ...Shadow.sm, marginHorizontal: Spacing.md },
     avatarBox: { width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
     avatarText: { fontSize: 22, fontWeight: '700', color: '#fff' },
     profileInfo: { flex: 1 },
@@ -276,39 +258,17 @@ const styles = StyleSheet.create({
     roleBadge: { marginTop: 6, alignSelf: 'flex-start', backgroundColor: Colors.primaryLight, paddingHorizontal: Spacing.sm, paddingVertical: 3, borderRadius: Radius.full },
     roleBadgeText: { ...Typography.overline, color: Colors.primary, fontWeight: '600' },
     editIconBtn: { padding: Spacing.sm },
-    inlineInput: {
-        ...Typography.body, color: Colors.textPrimary,
-        borderWidth: 1, borderColor: Colors.primary, borderRadius: Radius.sm,
-        paddingHorizontal: Spacing.sm, paddingVertical: 7,
-        backgroundColor: Colors.primaryLight,
-    },
+    inlineInput: { ...Typography.body, color: Colors.textPrimary, borderWidth: 1, borderColor: Colors.primary, borderRadius: Radius.sm, paddingHorizontal: Spacing.sm, paddingVertical: 7, backgroundColor: Colors.primaryLight },
 
-    // Save / Cancel row
-    editRow: {
-        flexDirection: 'row', gap: Spacing.sm,
-        marginHorizontal: Spacing.md,
-        marginTop: Spacing.xs,
-    },
-    cancelBtn: {
-        flex: 1, borderWidth: 1, borderColor: Colors.border,
-        padding: Spacing.md, borderRadius: Radius.lg, alignItems: 'center',
-        backgroundColor: Colors.surface,
-    },
+    editRow: { flexDirection: 'row', gap: Spacing.sm, marginHorizontal: Spacing.md, marginTop: Spacing.xs },
+    cancelBtn: { flex: 1, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, borderRadius: Radius.lg, alignItems: 'center', backgroundColor: Colors.surface },
     cancelBtnText: { ...Typography.button, color: Colors.textSecondary },
-    saveBtn: {
-        flex: 2, backgroundColor: Colors.primary,
-        padding: Spacing.md, borderRadius: Radius.lg, alignItems: 'center',
-    },
+    saveBtn: { flex: 2, backgroundColor: Colors.primary, padding: Spacing.md, borderRadius: Radius.lg, alignItems: 'center' },
     saveBtnText: { ...Typography.button, color: '#fff' },
 
-    // Menu
     menuContainer: { paddingHorizontal: Spacing.md, gap: Spacing.lg },
     menuSection: { gap: Spacing.xs },
-    menuSectionTitle: {
-        ...Typography.overline, color: Colors.textTertiary,
-        fontWeight: '700', textTransform: 'uppercase',
-        letterSpacing: 0.8, paddingHorizontal: Spacing.xs, marginBottom: 4,
-    },
+    menuSectionTitle: { ...Typography.overline, color: Colors.textTertiary, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, paddingHorizontal: Spacing.xs, marginBottom: 4 },
     menuCard: { backgroundColor: Colors.surface, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden', ...Shadow.sm },
     menuRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.md, paddingHorizontal: Spacing.md },
     menuIconBox: { width: 38, height: 38, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
@@ -317,18 +277,9 @@ const styles = StyleSheet.create({
     menuSub: { ...Typography.caption, color: Colors.textTertiary, marginTop: 2 },
     menuDivider: { height: 1, backgroundColor: Colors.borderLight, marginLeft: 70 },
 
-    // Logout
     logoutSection: { marginTop: Spacing.lg, marginHorizontal: Spacing.md },
-    logoutBtn: {
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-        gap: Spacing.sm, backgroundColor: Colors.errorLight,
-        padding: Spacing.md, borderRadius: Radius.lg,
-        borderWidth: 1, borderColor: '#FECACA',
-    },
+    logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, backgroundColor: Colors.errorLight, padding: Spacing.md, borderRadius: Radius.lg, borderWidth: 1, borderColor: '#FECACA' },
     logoutText: { ...Typography.button, color: Colors.error },
 
-    versionText: {
-        ...Typography.caption, color: Colors.textTertiary,
-        textAlign: 'center', marginTop: Spacing.lg, marginBottom: Spacing.sm,
-    },
+    versionText: { ...Typography.caption, color: Colors.textTertiary, textAlign: 'center', marginTop: Spacing.lg, marginBottom: Spacing.sm },
 });

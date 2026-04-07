@@ -230,7 +230,7 @@ export default function CartScreen() {
                 })}
 
                 {/* ── Price preview ────────────────────────────────────────────── */}
-                {grandTotal > 0 && (
+                {/* {grandTotal > 0 && (
                     <View style={styles.priceSummary}>
                         <Text style={styles.sectionTitle}>{'SERVICES ESTIMATE'}</Text>
                         {items.map((item) =>
@@ -254,7 +254,7 @@ export default function CartScreen() {
                             {'* Taxes, platform fee & delivery added at checkout.'}
                         </Text>
                     </View>
-                )}
+                )} */}
 
                 {/* ── Location ─────────────────────────────────────────────────── */}
                 <Text style={[styles.sectionTitle, { marginTop: Spacing.sm }]}>{'YOUR LOCATION'}</Text>

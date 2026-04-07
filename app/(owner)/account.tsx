@@ -3,10 +3,9 @@
 import React, { useState, useCallback } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, TextInput,
-    ScrollView, ActivityIndicator, Modal, FlatList,
+    ScrollView, ActivityIndicator, Modal, FlatList, Alert,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuthStore } from '../../store/authStore';
 import { logoutUser } from '../../utils/services/authService';
@@ -15,10 +14,7 @@ import { Colors, Typography, Spacing, Radius, Shadow } from '../../constants/the
 import Toast from '../../components/Toast';
 import { useToast } from '../../hooks/useToast';
 import * as Location from 'expo-location';
-import {
-    getMyGarage,
-    updateGarageInfo,
-} from '../../utils/services/garageService';
+import { getMyGarage, updateGarageInfo } from '../../utils/services/garageService';
 
 // ── Full service catalogue ────────────────────────────────────────────────────
 const BIKE_CATALOGUE = [
@@ -41,12 +37,8 @@ const SCOOTY_CATALOGUE = [
 function ServicePickerModal({
     visible, title, catalogue, selected, onDone, onClose,
 }: {
-    visible: boolean;
-    title: string;
-    catalogue: string[];
-    selected: string[];
-    onDone: (services: string[]) => void;
-    onClose: () => void;
+    visible: boolean; title: string; catalogue: string[];
+    selected: string[]; onDone: (services: string[]) => void; onClose: () => void;
 }) {
     const [current, setCurrent] = useState<string[]>(selected);
 
@@ -63,7 +55,6 @@ function ServicePickerModal({
         <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
             <View style={pickerStyles.backdrop}>
                 <View style={pickerStyles.sheet}>
-
                     <View style={pickerStyles.header}>
                         <Text style={pickerStyles.title}>{title}</Text>
                         <TouchableOpacity style={pickerStyles.closeBtn} onPress={onClose}>
@@ -88,9 +79,7 @@ function ServicePickerModal({
                                     activeOpacity={0.75}
                                 >
                                     <View style={[pickerStyles.checkbox, checked && pickerStyles.checkboxActive]}>
-                                        {checked ? (
-                                            <Ionicons name="checkmark" size={14} color="#fff" />
-                                        ) : null}
+                                        {checked ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}
                                     </View>
                                     <Text style={[pickerStyles.rowText, checked && pickerStyles.rowTextActive]}>
                                         {item}
@@ -111,7 +100,6 @@ function ServicePickerModal({
                             </Text>
                         </TouchableOpacity>
                     </View>
-
                 </View>
             </View>
         </Modal>
@@ -209,8 +197,9 @@ function InfoField({
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function OwnerAccount() {
     const router = useRouter();
-    const user = useAuthStore((s) => s.user);
-    const setUser = useAuthStore((s) => s.setUser);
+
+    // ✅ Single clean destructure — no setUser, no setAuth
+    const { user, logout, updateUser } = useAuthStore();
     const { toast, showToast, hideToast } = useToast();
 
     const [garage, setGarage] = useState<Garage | null>(null);
@@ -294,16 +283,23 @@ export default function OwnerAccount() {
         }
     };
 
+    // ── Save personal profile — uses updateUser instead of setUser ────────────
     const saveProfile = async () => {
         if (!name.trim() || !phone.trim()) {
             showToast('Name and phone cannot be empty.', 'error');
             return;
         }
         setSaving(true);
-        setUser({ ...user!, name: name.trim(), phone: phone.trim() });
-        setEditProfile(false);
-        setSaving(false);
-        showToast('Profile updated successfully.', 'success');
+        try {
+            // ✅ updateUser patches SecureStore + Zustand — no manual state juggling
+            await updateUser({ name: name.trim(), phone: phone.trim() });
+            setEditProfile(false);
+            showToast('Profile updated successfully.', 'success');
+        } catch (e: any) {
+            showToast(e?.message ?? 'Failed to update profile.', 'error');
+        } finally {
+            setSaving(false);
+        }
     };
 
     const saveGarageInfo = async () => {
@@ -330,12 +326,29 @@ export default function OwnerAccount() {
         }
     };
 
+    // ── Logout ────────────────────────────────────────────────────────────────
     const handleLogout = () => {
-        showToast('Logging out...', 'info');
-        setTimeout(async () => {
-            await logoutUser();
-            setUser(null);
-        }, 1000);
+        Alert.alert(
+            'Log Out',
+            'Are you sure you want to log out?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Log Out',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await logoutUser();   // blacklists token on backend
+                        } catch {
+                            // non-critical — still clear local state
+                        } finally {
+                            await logout();       // clears SecureStore + Zustand
+                            // ✅ NO router.replace — _layout AuthGate handles redirect
+                        }
+                    },
+                },
+            ]
+        );
     };
 
     if (loading) return <ActivityIndicator style={{ flex: 1 }} color={Colors.primary} />;
@@ -381,20 +394,8 @@ export default function OwnerAccount() {
                         setEditProfile(false);
                     }}
                 >
-                    <InfoField
-                        label="Full Name"
-                        value={name}
-                        editing={editProfile}
-                        onChangeText={setName}
-                    />
-                    <InfoField
-                        label="Phone Number"
-                        value={phone}
-                        editing={editProfile}
-                        onChangeText={setPhone}
-                        keyboardType="phone-pad"
-                        isLast
-                    />
+                    <InfoField label="Full Name" value={name} editing={editProfile} onChangeText={setName} />
+                    <InfoField label="Phone Number" value={phone} editing={editProfile} onChangeText={setPhone} keyboardType="phone-pad" isLast />
                 </SectionCard>
 
                 {/* Garage Info */}
@@ -416,7 +417,6 @@ export default function OwnerAccount() {
                     <InfoField label="Address" value={address} editing={editGarage} onChangeText={setAddress} multiline />
                     <InfoField label="Phone" value={garagePhone} editing={editGarage} onChangeText={setGaragePhone} keyboardType="phone-pad" isLast={!editGarage} />
 
-                    {/* Location picker — only visible while editing */}
                     {editGarage && (
                         <View style={styles.locationSection}>
                             <Text style={styles.locationFieldLabel}>{'Garage Location (GPS)'}</Text>
@@ -472,7 +472,7 @@ export default function OwnerAccount() {
                     )}
                 </SectionCard>
 
-                {/* Services Offered — navigates to dedicated edit-services page */}
+                {/* Services Offered */}
                 <View style={cardStyles.wrap}>
                     <View style={cardStyles.header}>
                         <View style={cardStyles.iconBox}>
@@ -490,7 +490,6 @@ export default function OwnerAccount() {
                     <View style={cardStyles.divider} />
                     <View style={cardStyles.body}>
 
-                        {/* Bike chips preview */}
                         <View style={styles.serviceSection}>
                             <View style={styles.serviceSectionHeader}>
                                 <View style={[styles.serviceTypeIcon, { backgroundColor: Colors.infoLight }]}>
@@ -521,7 +520,6 @@ export default function OwnerAccount() {
 
                         <View style={styles.divider} />
 
-                        {/* Scooty chips preview */}
                         <View style={[styles.serviceSection, { paddingBottom: 0 }]}>
                             <View style={styles.serviceSectionHeader}>
                                 <View style={[styles.serviceTypeIcon, { backgroundColor: '#F5F3FF' }]}>
@@ -550,7 +548,6 @@ export default function OwnerAccount() {
                             </View>
                         </View>
 
-                        {/* Manage button */}
                         <TouchableOpacity
                             style={styles.manageServicesBtn}
                             onPress={() => router.push('/(owner)/edit-services' as any)}
@@ -562,7 +559,6 @@ export default function OwnerAccount() {
                             </Text>
                             <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
                         </TouchableOpacity>
-
                     </View>
                 </View>
 
@@ -574,7 +570,6 @@ export default function OwnerAccount() {
 
             </ScrollView>
 
-            {/* Toast */}
             <Toast
                 visible={toast.visible}
                 message={toast.message}
@@ -644,7 +639,6 @@ const styles = StyleSheet.create({
     logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, backgroundColor: Colors.errorLight, padding: Spacing.md, borderRadius: Radius.lg, borderWidth: 1, borderColor: '#FECACA', marginHorizontal: Spacing.md },
     logoutText: { ...Typography.button, color: Colors.error },
 
-    // Location
     locationSection: { gap: Spacing.sm, marginTop: Spacing.md },
     locationFieldLabel: { ...Typography.caption, color: Colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.6 },
     fetchBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, padding: Spacing.md, borderRadius: Radius.md, borderWidth: 1.5, borderColor: Colors.primary, borderStyle: 'dashed', backgroundColor: Colors.primaryLight },
