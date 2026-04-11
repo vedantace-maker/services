@@ -5,6 +5,7 @@ export interface AppUser {
     email: string;
     name: string;
     role: UserRole;
+    address?: string;
     phone?: string;
 }
 

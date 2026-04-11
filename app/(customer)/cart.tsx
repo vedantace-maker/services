@@ -10,14 +10,22 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Location from 'expo-location';
 import { useCart } from '../../context/CartContext';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../constants/theme';
+import { useAuthStore } from '../../store/authStore';  // ✅ add
 
 export default function CartScreen() {
     const router = useRouter();
     const { items, removeItem, clearCart, loading } = useCart();
 
-    const [locationText, setLocationText] = useState('');
+    // const [locationText, setLocationText] = useState('');
+    // const [detectingLoc, setDetectingLoc] = useState(false);
+    // const [locationGranted, setLocationGranted] = useState(false);
+    // ✅ Replace with these
+    const { user } = useAuthStore();
+    const profileAddress = user?.address?.trim() ?? '';
+
+    const [locationText, setLocationText] = useState(profileAddress);          // pre-filled from profile
     const [detectingLoc, setDetectingLoc] = useState(false);
-    const [locationGranted, setLocationGranted] = useState(false);
+    const [locationGranted, setLocationGranted] = useState(profileAddress !== '');
 
     // ── Grand total from actual service prices ────────────────────────────────
     const grandTotal = items.reduce((sum, item) => sum + (item.estimatedPrice ?? 0), 0);
@@ -104,7 +112,8 @@ export default function CartScreen() {
 
             {/* ── Header ─────────────────────────────────────────────────────── */}
             <View style={styles.header}>
-                <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+                {/* <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}> */}
+                <TouchableOpacity style={styles.backBtn} onPress={() => router.push('/(customer)/book-slot' as any)}>
                     <Ionicons name="chevron-back" size={22} color={Colors.textPrimary} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>
@@ -257,24 +266,44 @@ export default function CartScreen() {
                 )} */}
 
                 {/* ── Location ─────────────────────────────────────────────────── */}
+                {/* ── Location ─────────────────────────────────────────────────── */}
                 <Text style={[styles.sectionTitle, { marginTop: Spacing.sm }]}>{'YOUR LOCATION'}</Text>
                 <View style={styles.locationCard}>
-                    <View style={styles.locationInputRow}>
-                        <View style={styles.locationIconWrap}>
-                            <Ionicons
-                                name={locationGranted ? 'location' : 'location-outline'}
-                                size={18}
-                                color={locationGranted ? Colors.primary : Colors.textTertiary}
-                            />
-                        </View>
-                        <Text
-                            style={[styles.locationText, !locationText && styles.locationPlaceholder]}
-                            numberOfLines={3}
-                        >
-                            {locationText || 'No location selected yet'}
-                        </Text>
-                    </View>
 
+                    {/* Show address if available */}
+                    {locationText ? (
+                        <View style={styles.locationInputRow}>
+                            <View style={styles.locationIconWrap}>
+                                <Ionicons name="location" size={18} color={Colors.primary} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.locationSourceLabel}>
+                                    {locationGranted && profileAddress && locationText === profileAddress
+                                        ? '📋 From your profile'
+                                        : '📍 Detected location'
+                                    }
+                                </Text>
+                                <Text style={styles.locationText} numberOfLines={3}>{locationText}</Text>
+                            </View>
+                            {/* Clear button */}
+                            <TouchableOpacity
+                                onPress={() => { setLocationText(''); setLocationGranted(false); }}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            >
+                                <Ionicons name="close-circle" size={20} color={Colors.textTertiary} />
+                            </TouchableOpacity>
+                        </View>
+                    ) : (
+                        /* No location yet — placeholder */
+                        <View style={styles.locationInputRow}>
+                            <View style={[styles.locationIconWrap, { backgroundColor: Colors.surfaceAlt }]}>
+                                <Ionicons name="location-outline" size={18} color={Colors.textTertiary} />
+                            </View>
+                            <Text style={styles.locationPlaceholder}>{'No location selected yet'}</Text>
+                        </View>
+                    )}
+
+                    {/* Detect button — always visible so user can override profile address */}
                     <TouchableOpacity
                         style={styles.detectBtn}
                         onPress={detectLocation}
@@ -282,12 +311,15 @@ export default function CartScreen() {
                         activeOpacity={0.8}
                     >
                         {detectingLoc ? (
-                            <ActivityIndicator size="small" color={Colors.primary} />
+                            <>
+                                <ActivityIndicator size="small" color={Colors.primary} />
+                                <Text style={styles.detectBtnText}>{'Detecting…'}</Text>
+                            </>
                         ) : (
                             <>
                                 <Ionicons name="navigate-outline" size={16} color={Colors.primary} />
                                 <Text style={styles.detectBtnText}>
-                                    {locationGranted ? 'Re-detect Location' : 'Use Current Location'}
+                                    {locationText ? 'Use Current Location Instead' : 'Detect My Location'}
                                 </Text>
                             </>
                         )}
@@ -418,4 +450,12 @@ const styles = StyleSheet.create({
     checkoutBtnDisabled: { backgroundColor: Colors.primary + '55' },
     checkoutBtnText: { ...Typography.button, color: '#fff', flex: 1, textAlign: 'center' },
     checkoutHint: { ...Typography.caption, color: Colors.textTertiary, textAlign: 'center' },
+    // Add inside StyleSheet.create
+    locationSourceLabel: {
+        ...Typography.overline,
+        color: Colors.textTertiary,
+        fontWeight: '700',
+        fontSize: 10,
+        marginBottom: 2,
+    },
 });

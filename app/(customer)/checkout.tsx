@@ -12,6 +12,7 @@ import { createBooking } from '../../utils/services/bookingService';
 import Toast from '../../components/Toast';
 import { useToast } from '../../hooks/useToast';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../constants/theme';
+import { useUIStore } from '../../store/uiStore';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PLATFORM FEE CONFIG (only these are fixed — service prices come from cart)
@@ -55,6 +56,7 @@ function getRefNode() {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function CheckoutScreen() {
     const router = useRouter();
+    const { setBookSlotShouldReset } = useUIStore();
     const { location } = useLocalSearchParams<{ location: string }>();
     const { items, clearCart } = useCart();
     const { toast, showToast, hideToast } = useToast();
@@ -117,16 +119,46 @@ export default function CheckoutScreen() {
         setPromoError('');
     };
 
+    const handleBookingSuccess = () => {
+        setBookSlotShouldReset(true);   // ✅ tells book-slot to reset next time
+        router.replace('/(customer)' as any);
+    };
+
+    // ── Book all items ────────────────────────────────────────────────────────
     // ── Book all items ────────────────────────────────────────────────────────
     const handleBook = async () => {
         if (items.length === 0) return;
         setBooking(true);
         const failed: number[] = [];
 
+        // ── Billing snapshot — calculated once for the whole order ────────────
+        const billingPayload = {
+            services_subtotal: servicesSubtotal,
+            platform_fee: platformFee,
+            delivery_charge: delivery,
+            discount: discount,
+            promo_code: appliedPromo ? promoInput.trim().toUpperCase() : '',
+            gst: gst,
+            cess: cess,
+            grand_total: grandTotal,
+            manifest_id: manifestId,
+            payment_status: 'pending',
+            payment_method: 'cash',
+        };
+
+        // console.log('──────────────────────────────────────');
+        // console.log('💰 servicesSubtotal :', servicesSubtotal);
+        // console.log('💰 platformFee      :', platformFee);
+        // console.log('💰 gst              :', gst);
+        // console.log('💰 grandTotal       :', grandTotal);
+        // console.log('📦 Full billingPayload:', JSON.stringify(billingPayload, null, 2));
+        // console.log('──────────────────────────────────────');
+
         for (let i = 0; i < items.length; i++) {
             const item = items[i];
             try {
                 await createBooking({
+                    // ── Booking fields ───────────────────────────────────────
                     garage: item.garageId,
                     date: item.date,
                     time: item.timeRaw,
@@ -134,7 +166,10 @@ export default function CheckoutScreen() {
                     bike_details: [item.vehicleBrand, item.vehicleModel, item.vehicleReg]
                         .filter(Boolean).join(' '),
                     selected_services: item.services.join(', '),
-                    // estimated_price: item.estimatedPrice || undefined,
+                    // estimated_price: item.estimatedPrice || 0,
+
+                    // ── Billing fields ───────────────────────────────────────
+                    ...billingPayload,
                 });
             } catch {
                 failed.push(i + 1);
@@ -154,6 +189,8 @@ export default function CheckoutScreen() {
             showToast('All bookings confirmed! 🎉', 'success');
             setTimeout(() => router.replace('/(customer)/my-bookings' as any), 1200);
         }
+
+        handleBookingSuccess();
     };
 
     return (

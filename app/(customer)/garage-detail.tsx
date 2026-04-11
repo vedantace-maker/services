@@ -12,6 +12,7 @@ import { Garage } from '../../types';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../constants/theme';
 import Toast from '../../components/Toast';
 import { useToast } from '../../hooks/useToast';
+import BackButton from "../../components/BackButton";
 
 type VehicleTab = 'bike' | 'scooty';
 
@@ -140,9 +141,13 @@ export default function GarageDetailsScreen() {
 
                 {/* ── Header ──────────────────────────────────────────────── */}
                 <View style={styles.header}>
-                    <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+                    {/* <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}> */}
+                    <TouchableOpacity style={styles.backBtn} onPress={() => router.push('/(customer)')}>
                         <Ionicons name="chevron-back" size={22} color={Colors.textPrimary} />
                     </TouchableOpacity>
+
+                    {/* <BackButton fallback="/(customer)" /> */}
+
                     <View style={styles.headerCenter}>
                         <Text style={styles.headerTitle} numberOfLines={1}>{garage.name}</Text>
                         <Text style={styles.headerSub}>{'Garage Details'}</Text>

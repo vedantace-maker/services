@@ -15,8 +15,15 @@ function formatTime(totalMinutes: number): string {
     return `${displayHour}:${displayMin} ${period}`;
 }
 
+// ── Builds a local "YYYY-MM-DD" string without UTC conversion ─────────────────
+function toLocalDateStr(d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
 // ── Returns time slots for a given weekday config ─────────────────────────────
-// Uses minute-based arithmetic to avoid floating point issues
 export function getSlotsForDay(s: DaySchedule): string[] {
     if (!s.isOpen) return [];
 
@@ -62,7 +69,7 @@ export function getAvailableDates(
         )!;
 
         result.push({
-            date: d.toISOString().split('T')[0],
+            date: toLocalDateStr(d),           // ✅ was: d.toISOString().split('T')[0]
             label: d.toLocaleDateString('en-IN', {
                 weekday: 'short', day: 'numeric', month: 'short',
             }),

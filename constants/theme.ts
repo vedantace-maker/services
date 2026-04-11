@@ -2,6 +2,9 @@ export const Colors = {
   primary: '#FF6B35',
   primaryLight: '#FFF4F0',
   primaryDark: '#E55A24',
+  // primary: '#000000',
+  // primaryLight: '#cac5c3',
+  // primaryDark: '#1e4a50',
 
   bg: '#F2F3F5',   // ← was #F7F8FA, now warmer off-white
   surface: '#FFFFFF',
@@ -15,11 +18,11 @@ export const Colors = {
   border: '#E5E7EB',
   borderLight: '#EFEFEF',   // ← softer dividers
 
-  success: '#10B981',
+  success: '#10b981',
   successLight: '#ECFDF5',
   warning: '#F59E0B',
   warningLight: '#FFFBEB',
-  error: '#EF4444',
+  error: '#ca2e2e',
   errorLight: '#FEF2F2',
   info: '#3B82F6',
   infoLight: '#EFF6FF',

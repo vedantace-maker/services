@@ -1,6 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import * as TaskManager from 'expo-task-manager';
+// import * as TaskManager from 'expo-task-manager';
 import { Platform } from 'react-native';
 import api from './api';
 

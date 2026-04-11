@@ -6,6 +6,7 @@ export type OwnerStatus = 'accepted' | 'rejected' | 'in_progress' | 'completed';
 // ── Customer ──────────────────────────────────────────────────────────────────
 
 export async function createBooking(payload: {
+    // ── Booking fields ────────────────────────────────────────────────────
     garage: string;
     date: string;
     time: string;
@@ -13,9 +14,22 @@ export async function createBooking(payload: {
     bike_details: string;
     selected_services: string;
     note?: string;
-    // estimated_price?: number;
+    // estimated_price: number;
+
+    // ── Billing fields ────────────────────────────────────────────────────
+    manifest_id: string;
+    services_subtotal: number;
+    platform_fee: number;
+    delivery_charge: number;
+    discount: number;
+    promo_code: string;
+    gst: number;
+    cess: number;
+    grand_total: number;
+    payment_status: string;
+    payment_method: string;
 }): Promise<Booking> {
-    const { data } = await api.post('/bookings/', payload);
+    const { data } = await api.post('/bookings/', payload);   // ✅ full payload forwarded
     return data;
 }
 

@@ -8,16 +8,21 @@
     "scheme": "autoservices",
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      // "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/icon.png"
     },
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true
     },
-    "android": {
+    "android": {  
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        // "backgroundColor": "#E6F4FE",
+        // "foregroundImage": "./assets/images/android-icon-foreground.png",
+        // "backgroundImage": "./assets/images/android-icon-background.png",
+        // "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#EDD8C0",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"

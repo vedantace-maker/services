@@ -22,6 +22,9 @@ import Toast from '../../components/Toast';
 import { useToast } from '../../hooks/useToast';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../constants/theme';
 import { useCart } from '../../context/CartContext';
+import { useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
+import { useUIStore } from '../../store/uiStore';
 
 type BookingVehicleType = 'bike' | 'scooty';
 type AvailableDate = { date: string; label: string; weekday: string };
@@ -36,7 +39,7 @@ function toHHMM(slot: string): string {
     const mins = mStr ?? '00';
     if (period === 'PM' && hours !== 12) hours += 12;
     if (period === 'AM' && hours === 12) hours = 0;
-    return hours.toString().padStart(2, '0') + mins;
+    return hours.toString().padStart(2, '0') + ':' + mins;  // ✅ Add ':'
 }
 
 function formatDisplayTime(time: string): string {
@@ -561,6 +564,7 @@ export default function BookSlotScreen() {
     const [loadingSlots, setLoadingSlots] = useState(false);
 
     const [addingToCart, setAddingToCart] = useState(false);
+    const { bookSlotShouldReset, setBookSlotShouldReset } = useUIStore();
 
     const { addItem } = useCart();
 
@@ -577,12 +581,18 @@ export default function BookSlotScreen() {
     const estimatedTotal = calcTotal(selectedServices, prices);
 
     // ── Load ──────────────────────────────────────────────────────────────────
+    // ✅ Restore these — run only on mount, state survives back-navigation
     useEffect(() => {
         if (!id) return;
         setLoading(true);
         getGarageById(id)
-            .then((g) => { setGarage(g); setAvailableDates(getAvailableDates(g.schedule ?? [], 14)); })
-            .catch((e: any) => showToast(e?.response?.data?.detail ?? 'Failed to load garage.', 'error'))
+            .then((g) => {
+                setGarage(g);
+                setAvailableDates(getAvailableDates(g.schedule ?? [], 14));
+            })
+            .catch((e: any) =>
+                showToast(e?.response?.data?.detail ?? 'Failed to load garage.', 'error')
+            )
             .finally(() => setLoading(false));
     }, [id]);
 
@@ -593,6 +603,25 @@ export default function BookSlotScreen() {
             .catch(() => { })
             .finally(() => setVehiclesLoading(false));
     }, []);
+
+    // ── Reset only when booking was just completed ────────────────────────────
+    useFocusEffect(
+        useCallback(() => {
+            if (!bookSlotShouldReset) return;   // ← back from cart? do nothing
+
+            // Reset all form state
+            setSelectedVehicle(null);
+            setVehicleType('bike');
+            setBikeDetails('');
+            setSelectedServices([]);
+            setSelectedDate(null);
+            setAvailableSlots([]);
+            setSelectedSlot(null);
+            setBookedSlots([]);
+
+            setBookSlotShouldReset(false);      // ← clear flag so it doesn't reset again
+        }, [bookSlotShouldReset])
+    );
 
     // ── Handlers ──────────────────────────────────────────────────────────────
     const handleSelectVehicle = (v: Vehicle) => {
@@ -692,7 +721,7 @@ export default function BookSlotScreen() {
                 estimatedPrice: estimatedTotal,
             });
             showToast('Added to cart!', 'success');
-            setTimeout(() => router.push('/(customer)/cart' as any), 800);
+            setTimeout(() => router.replace('/(customer)/cart' as any), 800);
         } catch {
             showToast('Failed to add to cart. Please try again.', 'error');
         } finally {
@@ -714,7 +743,8 @@ export default function BookSlotScreen() {
 
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+                {/* <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}> */}
+                <TouchableOpacity style={styles.backBtn} onPress={() => router.push('/(customer)/garage-detail')}>
                     <Ionicons name="chevron-back" size={22} color={Colors.textPrimary} />
                 </TouchableOpacity>
                 <View style={styles.headerCenter}>

@@ -4,9 +4,12 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
-const BASE_URL =
-    process.env.EXPO_PUBLIC_API_BASE_URL ??
-    'http://192.168.1.201:8000/api/v1';   // ← fallback if .env is missing
+const BASE_URL = 
+// 'http://13.202.113.121:4000/api/v1';
+    // process.env.EXPO_PUBLIC_API_BASE_URL 
+    // ??
+    'http://192.168.1.203:8000/api/v1';   // ← fallback if .env is missing
+       // ← fallback if .env is missing
 
 const api = axios.create({
     baseURL: BASE_URL,

@@ -35,7 +35,12 @@ export default function AboutScreen() {
 
             {/* ── Header ──────────────────────────────────────────────────────── */}
             <View style={styles.header}>
-                <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+                {/* <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}> */}
+                <TouchableOpacity
+                    style={styles.backBtn}
+                    // onPress={() => router.canGoBack() ? router.back() : router.replace('/(customer)/account' as any)}
+                    onPress={() => router.replace('/(customer)/account' as any)}
+                >
                     <Ionicons name="chevron-back" size={22} color={Colors.textPrimary} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>About MotoBee</Text>
