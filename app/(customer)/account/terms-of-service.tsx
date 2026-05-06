@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Colors, Typography, Spacing, Radius, Shadow } from '../../constants/theme';
+import { Colors, Typography, Spacing, Radius, Shadow } from '../../../constants/theme';
 
 const SECTIONS = [
     {
@@ -76,7 +76,7 @@ export default function TermsOfServiceScreen() {
 
             {/* ── Header ──────────────────────────────────────────────────────── */}
             <View style={styles.header}>
-                <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+                <TouchableOpacity style={styles.backBtn} onPress={() => router.push("/(customer)/about")}>
                     <Ionicons name="chevron-back" size={22} color={Colors.textPrimary} />
                 </TouchableOpacity>
                 <View style={styles.headerCenter}>

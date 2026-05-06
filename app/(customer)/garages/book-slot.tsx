@@ -8,23 +8,21 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { getGarageById } from '../../utils/services/garageService';
-// import { createBooking, getBookedSlots } from '../../utils/services/bookingService';
-import { getBookedSlots } from '../../utils/services/bookingService';
-import { addToCart } from '../../utils/services/cartService';
-import { getAvailableDates, getSlotsForDay } from '../../utils/helpers/slotGenerator';
+import { getGarageById } from '../../../utils/services/garageService';
+import { getBookedSlots } from '../../../utils/services/bookingService';
+import { getAvailableDates, getSlotsForDay } from '../../../utils/helpers/slotGenerator';
 import {
     getMyVehicles, addVehicle, deleteVehicle,
     Vehicle, VehiclePayload, VehicleType as VType,
-} from '../../utils/services/vehicleService';
-import { Garage, DaySchedule } from '../../types';
-import Toast from '../../components/Toast';
-import { useToast } from '../../hooks/useToast';
-import { Colors, Typography, Spacing, Radius, Shadow } from '../../constants/theme';
-import { useCart } from '../../context/CartContext';
+} from '../../../utils/services/vehicleService';
+import { Garage, DaySchedule } from '../../../types';
+import Toast from '../../../components/Toast';
+import { useToast } from '../../../hooks/useToast';
+import { Colors, Typography, Spacing, Radius, Shadow } from '../../../constants/theme';
+import { useCart } from '../../../context/CartContext';
 import { useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
-import { useUIStore } from '../../store/uiStore';
+import { useUIStore } from '../../../store/uiStore';
 
 type BookingVehicleType = 'bike' | 'scooty';
 type AvailableDate = { date: string; label: string; weekday: string };
@@ -743,8 +741,11 @@ export default function BookSlotScreen() {
 
             {/* Header */}
             <View style={styles.header}>
-                {/* <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}> */}
-                <TouchableOpacity style={styles.backBtn} onPress={() => router.push('/(customer)/garage-detail')}>
+                <TouchableOpacity
+                    style={styles.backBtn}
+                    onPress={() => router.push({ pathname: '/(customer)/garages/garage-detail', params: { id: String(garage.id) } } as any)}
+                    activeOpacity={0.88}
+                >
                     <Ionicons name="chevron-back" size={22} color={Colors.textPrimary} />
                 </TouchableOpacity>
                 <View style={styles.headerCenter}>

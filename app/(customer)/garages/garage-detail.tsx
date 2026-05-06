@@ -7,12 +7,12 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { getGarageById } from '../../utils/services/garageService';
-import { Garage } from '../../types';
-import { Colors, Typography, Spacing, Radius, Shadow } from '../../constants/theme';
-import Toast from '../../components/Toast';
-import { useToast } from '../../hooks/useToast';
-import BackButton from "../../components/BackButton";
+import { getGarageById } from '../../../utils/services/garageService';
+import { Garage } from '../../../types';
+import { Colors, Typography, Spacing, Radius, Shadow } from '../../../constants/theme';
+import Toast from '../../../components/Toast';
+import { useToast } from '../../../hooks/useToast';
+// import BackButton from "../../components/BackButton";
 
 type VehicleTab = 'bike' | 'scooty';
 
@@ -142,7 +142,16 @@ export default function GarageDetailsScreen() {
                 {/* ── Header ──────────────────────────────────────────────── */}
                 <View style={styles.header}>
                     {/* <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}> */}
-                    <TouchableOpacity style={styles.backBtn} onPress={() => router.push('/(customer)')}>
+                    <TouchableOpacity
+                        style={styles.backBtn}
+                        onPress={() => {
+                            if (router.canGoBack()) {
+                                router.back();
+                            } else {
+                                router.replace('/(customer)/garages' as any);
+                            }
+                        }}
+                    >
                         <Ionicons name="chevron-back" size={22} color={Colors.textPrimary} />
                     </TouchableOpacity>
 
@@ -297,7 +306,7 @@ export default function GarageDetailsScreen() {
                 </View>
                 <TouchableOpacity
                     style={styles.bookBtn}
-                    onPress={() => router.push({ pathname: '/(customer)/book-slot', params: { id: String(garage.id) } } as any)}
+                    onPress={() => router.push({ pathname: '/(customer)/garages/book-slot', params: { id: String(garage.id) } } as any)}
                     activeOpacity={0.88}
                 >
                     <Ionicons name="calendar-outline" size={18} color="#fff" />

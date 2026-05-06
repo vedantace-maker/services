@@ -15,3 +15,13 @@
     "expo-env.d.ts"
   ]
 }
+
+
+// import { useLocationStore } from '../store/locationStore';
+
+// const resetLocation = useLocationStore((s) => s.reset);
+
+// const handleLogout = () => {
+//     useAuthStore.getState().logout();
+//     resetLocation();  // ✅ clears all location data
+// };

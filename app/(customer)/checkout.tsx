@@ -13,14 +13,15 @@ import Toast from '../../components/Toast';
 import { useToast } from '../../hooks/useToast';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../constants/theme';
 import { useUIStore } from '../../store/uiStore';
+import { useLocationStore } from '../../store/locationStore';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PLATFORM FEE CONFIG (only these are fixed — service prices come from cart)
+// PLATFORM FEE CONFIG
 // ─────────────────────────────────────────────────────────────────────────────
-const SERVICE_FEE_RATE = 0.05;   // 5% platform fee on services subtotal
-const DELIVERY_CHARGE = 149;    // flat pickup & delivery fee
-const GST_RATE = 0.18;   // 18% GST
-const CESS_RATE = 0.01;   // 1% Infrastructure Cess
+const SERVICE_FEE_RATE = 0.05;
+const DELIVERY_CHARGE = 149;
+const GST_RATE = 0.18;
+const CESS_RATE = 0.01;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PROMO CODES
@@ -32,6 +33,15 @@ const PROMO_CODES: Record<string, PromoType> = {
     'WELCOME': { type: 'percent', value: 10, label: '10% off total' },
     'AUTOCARE': { type: 'flat', value: 200, label: '₹200 off total' },
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TYPE META
+// ─────────────────────────────────────────────────────────────────────────────
+const TYPE_META = {
+    home: { icon: 'home', color: '#16A34A', bg: '#DCFCE7', label: 'Home' },
+    office: { icon: 'briefcase', color: '#2563EB', bg: '#DBEAFE', label: 'Office' },
+    other: { icon: 'location-sharp', color: '#FF6B35', bg: '#FFF4F0', label: 'Other' },
+} as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -57,9 +67,42 @@ function getRefNode() {
 export default function CheckoutScreen() {
     const router = useRouter();
     const { setBookSlotShouldReset } = useUIStore();
-    const { location } = useLocalSearchParams<{ location: string }>();
     const { items, clearCart } = useCart();
     const { toast, showToast, hideToast } = useToast();
+
+    // ── Read params passed from cart ──────────────────────────────────────────
+    const {
+        location,
+        delivery_latitude,
+        delivery_longitude,
+    } = useLocalSearchParams<{
+        location: string;
+        delivery_latitude: string;
+        delivery_longitude: string;
+    }>();
+
+    // ── Fallback to Zustand store's activeProfile if params are missing ────────
+    const { activeProfile } = useLocationStore();
+
+    const resolvedAddress = location?.trim() || activeProfile?.address || '';
+    const resolvedLatitude = delivery_latitude?.trim() || String(activeProfile?.latitude ?? '');
+    const resolvedLongitude = delivery_longitude?.trim() || String(activeProfile?.longitude ?? '');
+
+    // ── Source label for delivery card ────────────────────────────────────────
+    const isFromStore = !location?.trim() && !!activeProfile;
+    const locationMeta = activeProfile ? TYPE_META[activeProfile.type] : null;
+
+    // ── Debug: log what arrived ───────────────────────────────────────────────
+    console.log('🧾 [checkout] params received:', {
+        location,
+        delivery_latitude,
+        delivery_longitude,
+    });
+    console.log('✅ [checkout] resolved:', {
+        resolvedAddress,
+        resolvedLatitude,
+        resolvedLongitude,
+    });
 
     const [promoInput, setPromoInput] = useState('');
     const [appliedPromo, setAppliedPromo] = useState<PromoType | null>(null);
@@ -70,32 +113,20 @@ export default function CheckoutScreen() {
     const [refNode] = useState(getRefNode);
     const [manifestId] = useState(() => 'MNF-' + Date.now().toString(36).toUpperCase());
 
-    // ── Pricing — all from actual cart item service prices ────────────────────
-    // 01 — Services: sum of estimated prices from garage
+    // ── Pricing ───────────────────────────────────────────────────────────────
     const servicesSubtotal = items.reduce((sum, item) => sum + (item.estimatedPrice ?? 0), 0);
-
-    // 02 — Platform fee: 5% of services
     const platformFee = Math.round(servicesSubtotal * SERVICE_FEE_RATE * 100) / 100;
-
-    // 03 — Delivery: flat
     const delivery = DELIVERY_CHARGE;
-
-    // Subtotal before discount
     const subtotal = servicesSubtotal + platformFee + delivery;
 
-    // Discount from promo
     let discount = 0;
     if (appliedPromo) {
         if (appliedPromo.type === 'flat') discount = appliedPromo.value;
         if (appliedPromo.type === 'percent') discount = Math.round((subtotal * appliedPromo.value) / 100 * 100) / 100;
     }
     const discountedSubtotal = Math.max(0, subtotal - discount);
-
-    // Taxes on discounted subtotal
     const gst = Math.round(discountedSubtotal * GST_RATE * 100) / 100;
     const cess = Math.round(discountedSubtotal * CESS_RATE * 100) / 100;
-
-    // Grand total
     const grandTotal = Math.round((discountedSubtotal + gst + cess) * 100) / 100;
 
     // ── Promo ─────────────────────────────────────────────────────────────────
@@ -120,18 +151,16 @@ export default function CheckoutScreen() {
     };
 
     const handleBookingSuccess = () => {
-        setBookSlotShouldReset(true);   // ✅ tells book-slot to reset next time
+        setBookSlotShouldReset(true);
         router.replace('/(customer)' as any);
     };
 
-    // ── Book all items ────────────────────────────────────────────────────────
     // ── Book all items ────────────────────────────────────────────────────────
     const handleBook = async () => {
         if (items.length === 0) return;
         setBooking(true);
         const failed: number[] = [];
 
-        // ── Billing snapshot — calculated once for the whole order ────────────
         const billingPayload = {
             services_subtotal: servicesSubtotal,
             platform_fee: platformFee,
@@ -144,34 +173,39 @@ export default function CheckoutScreen() {
             manifest_id: manifestId,
             payment_status: 'pending',
             payment_method: 'cash',
-        };
 
-        // console.log('──────────────────────────────────────');
-        // console.log('💰 servicesSubtotal :', servicesSubtotal);
-        // console.log('💰 platformFee      :', platformFee);
-        // console.log('💰 gst              :', gst);
-        // console.log('💰 grandTotal       :', grandTotal);
-        // console.log('📦 Full billingPayload:', JSON.stringify(billingPayload, null, 2));
-        // console.log('──────────────────────────────────────');
+        };
 
         for (let i = 0; i < items.length; i++) {
             const item = items[i];
-            try {
-                await createBooking({
-                    // ── Booking fields ───────────────────────────────────────
-                    garage: item.garageId,
-                    date: item.date,
-                    time: item.timeRaw,
-                    vehicle_type: item.vehicleType as 'bike' | 'scooty',
-                    bike_details: [item.vehicleBrand, item.vehicleModel, item.vehicleReg]
-                        .filter(Boolean).join(' '),
-                    selected_services: item.services.join(', '),
-                    // estimated_price: item.estimatedPrice || 0,
 
-                    // ── Billing fields ───────────────────────────────────────
-                    ...billingPayload,
-                });
-            } catch {
+            // ✅ Build full payload with delivery fields explicitly set
+            const payload = {
+                // ── Booking ──────────────────────────────────────────────
+                garage: item.garageId,
+                date: item.date,
+                time: item.timeRaw,
+                vehicle_type: item.vehicleType as 'bike' | 'scooty',
+                bike_details: [item.vehicleBrand, item.vehicleModel, item.vehicleReg]
+                    .filter(Boolean).join(' '),
+                selected_services: item.services.join(', '),
+
+                // ✅ Delivery location — explicit, never from spread
+                delivery_address: resolvedAddress.trim() || undefined,
+                delivery_latitude: resolvedLatitude ? parseFloat(resolvedLatitude) : undefined,
+                delivery_longitude: resolvedLongitude ? parseFloat(resolvedLongitude) : undefined,
+
+                // ── Billing ──────────────────────────────────────────────
+                ...billingPayload,
+            };
+
+            // ✅ Debug: verify all 3 delivery fields are in the payload
+            console.log('📦 [checkout] createBooking payload:', JSON.stringify(payload, null, 2));
+
+            try {
+                await createBooking(payload);
+            } catch (e) {
+                console.error(`❌ [checkout] booking #${i + 1} failed:`, e);
                 failed.push(i + 1);
             }
         }
@@ -193,15 +227,18 @@ export default function CheckoutScreen() {
         handleBookingSuccess();
     };
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // RENDER
+    // ─────────────────────────────────────────────────────────────────────────
     return (
         <View style={styles.root}>
 
-            {/* ── Header ──────────────────────────────────────────────────────── */}
+            {/* ── Header ───────────────────────────────────────────────────── */}
             <View style={styles.header}>
                 <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
                     <Ionicons name="chevron-back" size={22} color={Colors.textPrimary} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>{'BILLING_DETAILS'}</Text>
+                <Text style={styles.headerTitle}>BILLING_DETAILS</Text>
                 <TouchableOpacity
                     style={styles.helpBtn}
                     onPress={() => showToast('Prices are estimates. Final amount confirmed at garage.', 'success')}
@@ -210,31 +247,33 @@ export default function CheckoutScreen() {
                 </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+            <ScrollView
+                contentContainerStyle={styles.content}
+                keyboardShouldPersistTaps="handled"
+            >
 
-                {/* ── MANIFEST CARD ────────────────────────────────────────────── */}
+                {/* ── MANIFEST CARD ─────────────────────────────────────────── */}
                 <View style={styles.manifestCard}>
                     <View style={styles.manifestTopRow}>
                         <View>
-                            <Text style={styles.manifestIdLabel}>{'MANIFEST_ID'}</Text>
+                            <Text style={styles.manifestIdLabel}>MANIFEST_ID</Text>
                             <Text style={styles.manifestIdValue}>{manifestId}</Text>
                         </View>
                         <View style={styles.manifestTimestampBox}>
-                            <Text style={styles.manifestTimestampLabel}>{'TIMESTAMP'}</Text>
+                            <Text style={styles.manifestTimestampLabel}>TIMESTAMP</Text>
                             <Text style={styles.manifestTimestampValue}>{timestamp}</Text>
                         </View>
                     </View>
                     <View style={styles.manifestMetaRow}>
                         <View style={styles.manifestStatusPill}>
                             <View style={styles.manifestDot} />
-                            <Text style={styles.manifestStatusText}>{'ST_ACTIVE_SESSION'}</Text>
+                            <Text style={styles.manifestStatusText}>ST_ACTIVE_SESSION</Text>
                         </View>
                         <View style={styles.manifestRefBox}>
                             <Ionicons name="git-network-outline" size={12} color={Colors.textSecondary} />
                             <Text style={styles.manifestRefText}>{'REF_NODE: ' + refNode}</Text>
                         </View>
                     </View>
-                    {/* Booking count badge */}
                     <View style={styles.manifestCountRow}>
                         <Ionicons name="cart-outline" size={13} color={Colors.primary} />
                         <Text style={styles.manifestCountText}>
@@ -243,11 +282,97 @@ export default function CheckoutScreen() {
                     </View>
                 </View>
 
-                {/* ── ITEMIZED SERVICES ────────────────────────────────────────── */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionLabel}>{'ITEMIZED_SERVICES'}</Text>
+                {/* ── DELIVERY LOCATION CARD ────────────────────────────────── */}
+                <View style={styles.deliveryCard}>
 
-                    {/* Per-garage breakdown */}
+                    {/* Header */}
+                    <View style={styles.deliveryCardHeader}>
+                        <View style={styles.deliveryCardHeaderLeft}>
+                            <Ionicons name="location-outline" size={14} color={Colors.primary} />
+                            <Text style={styles.deliveryCardHeaderTitle}>DELIVERY_LOCATION</Text>
+                        </View>
+                        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
+                            <Text style={styles.deliveryChangeBtn}>CHANGE</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {resolvedAddress ? (
+                        <View style={styles.deliveryAddressRow}>
+                            {/* Icon */}
+                            <View style={[
+                                styles.deliveryAddressIcon,
+                                {
+                                    backgroundColor: isFromStore && locationMeta
+                                        ? locationMeta.bg
+                                        : Colors.primary + '18',
+                                },
+                            ]}>
+                                <Ionicons
+                                    name={
+                                        (isFromStore && locationMeta
+                                            ? locationMeta.icon
+                                            : 'navigate') as any
+                                    }
+                                    size={18}
+                                    color={
+                                        isFromStore && locationMeta
+                                            ? locationMeta.color
+                                            : Colors.primary
+                                    }
+                                />
+                            </View>
+
+                            {/* Text */}
+                            <View style={styles.deliveryAddressBody}>
+                                <View style={styles.deliveryAddressTopRow}>
+                                    <Text style={styles.deliveryAddressLabel}>
+                                        {isFromStore && activeProfile
+                                            ? activeProfile.label
+                                            : 'Current Location'}
+                                    </Text>
+                                    <View style={styles.deliveryVerifiedChip}>
+                                        <View style={styles.deliveryVerifiedDot} />
+                                        <Text style={styles.deliveryVerifiedText}>Confirmed</Text>
+                                    </View>
+                                </View>
+                                <Text style={styles.deliveryAddressText} numberOfLines={2}>
+                                    {resolvedAddress}
+                                </Text>
+                                {/* Coordinates */}
+                                {(resolvedLatitude && resolvedLongitude) ? (
+                                    <View style={styles.deliveryCoordsRow}>
+                                        <Ionicons
+                                            name="navigate-circle-outline"
+                                            size={11}
+                                            color={Colors.textTertiary}
+                                        />
+                                        <Text style={styles.deliveryCoordsText}>
+                                            {`${parseFloat(resolvedLatitude).toFixed(5)}, ${parseFloat(resolvedLongitude).toFixed(5)}`}
+                                        </Text>
+                                    </View>
+                                ) : null}
+                            </View>
+                        </View>
+                    ) : (
+                        /* No location warning */
+                        <TouchableOpacity
+                            style={styles.deliveryMissingRow}
+                            onPress={() => router.back()}
+                            activeOpacity={0.8}
+                        >
+                            <Ionicons name="warning-outline" size={18} color={Colors.warning} />
+                            <Text style={styles.deliveryMissingText}>
+                                No delivery location set — tap to go back and add one
+                            </Text>
+                            <Ionicons name="chevron-forward" size={14} color={Colors.warning} />
+                        </TouchableOpacity>
+                    )}
+                </View>
+
+                {/* ── ITEMIZED SERVICES ─────────────────────────────────────── */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionLabel}>ITEMIZED_SERVICES</Text>
+
                     {items.map((item, i) => (
                         <React.Fragment key={item.cartId}>
                             <View style={styles.lineItem}>
@@ -278,8 +403,8 @@ export default function CheckoutScreen() {
                     {/* Services subtotal */}
                     <View style={styles.lineItem}>
                         <View>
-                            <Text style={styles.lineItemCode}>{'SUB_TOTAL'}</Text>
-                            <Text style={styles.lineItemName}>{'Services Subtotal'}</Text>
+                            <Text style={styles.lineItemCode}>SUB_TOTAL</Text>
+                            <Text style={styles.lineItemName}>Services Subtotal</Text>
                         </View>
                         <Text style={[styles.lineItemAmount, { color: Colors.primary }]}>
                             {fmt(servicesSubtotal)}
@@ -291,21 +416,23 @@ export default function CheckoutScreen() {
                     {/* Platform fee */}
                     <View style={styles.lineItem}>
                         <View>
-                            <Text style={styles.lineItemCode}>{'FEE_5PCT'}</Text>
-                            <Text style={styles.lineItemName}>{'Platform Fee (5%)'}</Text>
+                            <Text style={styles.lineItemCode}>FEE_5PCT</Text>
+                            <Text style={styles.lineItemName}>Platform Fee (5%)</Text>
                         </View>
                         <Text style={styles.lineItemAmount}>{fmt(platformFee)}</Text>
                     </View>
 
                     <View style={styles.itemDivider} />
 
-                    {/* Delivery */}
+                    {/* Delivery charge */}
                     <View style={styles.lineItem}>
                         <View style={{ flex: 1 }}>
-                            <Text style={styles.lineItemCode}>{'LOGI_DELIVERY'}</Text>
-                            <Text style={styles.lineItemName}>{'Pickup & Delivery (Express)'}</Text>
-                            {!!location && (
-                                <Text style={styles.lineItemSub} numberOfLines={1}>{location}</Text>
+                            <Text style={styles.lineItemCode}>LOGI_DELIVERY</Text>
+                            <Text style={styles.lineItemName}>Pickup & Delivery (Express)</Text>
+                            {!!resolvedAddress && (
+                                <Text style={styles.lineItemSub} numberOfLines={1}>
+                                    {resolvedAddress}
+                                </Text>
                             )}
                         </View>
                         <Text style={styles.lineItemAmount}>{fmt(delivery)}</Text>
@@ -317,7 +444,9 @@ export default function CheckoutScreen() {
                             <View style={styles.itemDivider} />
                             <View style={styles.lineItem}>
                                 <View>
-                                    <Text style={[styles.lineItemCode, { color: Colors.success }]}>{'PROMO_DISC'}</Text>
+                                    <Text style={[styles.lineItemCode, { color: Colors.success }]}>
+                                        PROMO_DISC
+                                    </Text>
                                     <Text style={[styles.lineItemName, { color: Colors.success }]}>
                                         {promoInput.toUpperCase() + ' (' + appliedPromo.label + ')'}
                                     </Text>
@@ -330,27 +459,27 @@ export default function CheckoutScreen() {
                     )}
                 </View>
 
-                {/* ── TAX COMPLIANCE ───────────────────────────────────────────── */}
+                {/* ── TAX COMPLIANCE ────────────────────────────────────────── */}
                 <View style={styles.taxBox}>
-                    <Text style={styles.taxLabel}>{'TAX_COMPLIANCE'}</Text>
+                    <Text style={styles.taxLabel}>TAX_COMPLIANCE</Text>
                     <View style={styles.taxRow}>
-                        <Text style={styles.taxName}>{'GST (18%)'}</Text>
+                        <Text style={styles.taxName}>GST (18%)</Text>
                         <Text style={styles.taxAmount}>{fmt(gst)}</Text>
                     </View>
                     <View style={styles.taxRow}>
-                        <Text style={styles.taxName}>{'Infrastructure Cess (1%)'}</Text>
+                        <Text style={styles.taxName}>Infrastructure Cess (1%)</Text>
                         <Text style={styles.taxAmount}>{fmt(cess)}</Text>
                     </View>
                 </View>
 
-                {/* ── PROMO CODE ───────────────────────────────────────────────── */}
+                {/* ── PROMO CODE ────────────────────────────────────────────── */}
                 <View style={styles.section}>
                     <View style={styles.promoHeaderRow}>
-                        <Text style={styles.sectionLabel}>{'PROMO_CODE'}</Text>
+                        <Text style={styles.sectionLabel}>PROMO_CODE</Text>
                         <TouchableOpacity
                             onPress={() => showToast('Codes: FIRST50 · SAVE100 · WELCOME · AUTOCARE', 'success')}
                         >
-                            <Text style={styles.viewOffersText}>{'VIEW_OFFERS'}</Text>
+                            <Text style={styles.viewOffersText}>VIEW_OFFERS</Text>
                         </TouchableOpacity>
                     </View>
 
@@ -376,7 +505,7 @@ export default function CheckoutScreen() {
                                 autoCapitalize="characters"
                             />
                             <TouchableOpacity style={styles.applyBtn} onPress={applyPromo}>
-                                <Text style={styles.applyBtnText}>{'APPLY'}</Text>
+                                <Text style={styles.applyBtnText}>APPLY</Text>
                             </TouchableOpacity>
                         </View>
                     )}
@@ -384,28 +513,28 @@ export default function CheckoutScreen() {
                     {!!promoError && <Text style={styles.promoError}>{promoError}</Text>}
                 </View>
 
-                {/* ── GRAND TOTAL ──────────────────────────────────────────────── */}
+                {/* ── GRAND TOTAL ───────────────────────────────────────────── */}
                 <View style={styles.grandTotalBox}>
                     <View>
-                        <Text style={styles.grandTotalLabel}>{'GRAND_TOTAL'}</Text>
-                        <Text style={styles.grandTotalSub}>{'FINAL_PAYMENT_DUE'}</Text>
+                        <Text style={styles.grandTotalLabel}>GRAND_TOTAL</Text>
+                        <Text style={styles.grandTotalSub}>FINAL_PAYMENT_DUE</Text>
                     </View>
                     <Text style={styles.grandTotalAmount}>{fmt(grandTotal)}</Text>
                 </View>
 
-                {/* Estimate disclaimer */}
+                {/* Disclaimer */}
                 <View style={styles.disclaimerBox}>
                     <Ionicons name="information-circle-outline" size={14} color={Colors.textTertiary} />
                     <Text style={styles.disclaimerText}>
-                        {'Service prices are estimates from garage listings. Final amount is confirmed after inspection at the garage.'}
+                        Service prices are estimates from garage listings. Final amount is confirmed after inspection at the garage.
                     </Text>
                 </View>
 
-                {/* ── ENCRYPTED TRANSACTION ────────────────────────────────────── */}
+                {/* ── ENCRYPTED ─────────────────────────────────────────────── */}
                 <View style={styles.encryptedBox}>
                     <View style={styles.encryptedLeft}>
                         <Ionicons name="lock-closed" size={14} color={Colors.textTertiary} />
-                        <Text style={styles.encryptedText}>{'ENCRYPTED_TRANSACTION'}</Text>
+                        <Text style={styles.encryptedText}>ENCRYPTED_TRANSACTION</Text>
                     </View>
                     <View style={styles.paymentIconBox}>
                         <Ionicons name="card" size={20} color={Colors.textSecondary} />
@@ -415,12 +544,15 @@ export default function CheckoutScreen() {
                 <View style={{ height: 120 }} />
             </ScrollView>
 
-            {/* ── PROCEED TO PAY ───────────────────────────────────────────────── */}
+            {/* ── FOOTER / PROCEED TO PAY ───────────────────────────────────── */}
             <View style={styles.footer}>
                 <TouchableOpacity
-                    style={[styles.payBtn, booking && styles.payBtnDisabled]}
+                    style={[
+                        styles.payBtn,
+                        (booking || !resolvedAddress) && styles.payBtnDisabled,
+                    ]}
                     onPress={handleBook}
-                    disabled={booking}
+                    disabled={booking || !resolvedAddress}
                     activeOpacity={0.88}
                 >
                     {booking ? (
@@ -428,19 +560,35 @@ export default function CheckoutScreen() {
                     ) : (
                         <>
                             <View>
-                                <Text style={styles.payBtnTitle}>{'PROCEED_TO_PAY'}</Text>
-                                <Text style={styles.payBtnSub}>{'EST_SECURE_GATEWAY_V.04'}</Text>
+                                <Text style={styles.payBtnTitle}>PROCEED_TO_PAY</Text>
+                                <Text style={styles.payBtnSub}>EST_SECURE_GATEWAY_V.04</Text>
                             </View>
                             <Ionicons name="arrow-forward" size={22} color="#fff" />
                         </>
                     )}
                 </TouchableOpacity>
+
+                {/* No location warning in footer */}
+                {!resolvedAddress && (
+                    <View style={styles.noLocationWarning}>
+                        <Ionicons name="warning-outline" size={13} color={Colors.warning} />
+                        <Text style={styles.noLocationWarningText}>
+                            Go back to cart and set a delivery location to proceed
+                        </Text>
+                    </View>
+                )}
+
                 <Text style={styles.termsText}>
-                    {'BY PROCEEDING, YOU AGREE TO THE TECHNICAL SERVICE AGREEMENT.'}
+                    BY PROCEEDING, YOU AGREE TO THE TECHNICAL SERVICE AGREEMENT.
                 </Text>
             </View>
 
-            <Toast visible={toast.visible} message={toast.message} type={toast.type} onHide={hideToast} />
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                onHide={hideToast}
+            />
         </View>
     );
 }
@@ -454,6 +602,7 @@ const CODE_COLOR = Colors.primary;
 const styles = StyleSheet.create({
     root: { flex: 1, backgroundColor: Colors.bg },
 
+    // ── Header ────────────────────────────────────────────────────────────────
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surface, paddingHorizontal: Spacing.md, paddingTop: 56, paddingBottom: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
     backBtn: { width: 36, height: 36, borderRadius: Radius.sm, backgroundColor: Colors.bg, alignItems: 'center', justifyContent: 'center' },
     headerTitle: { fontFamily: 'monospace', fontSize: 14, fontWeight: '800', color: Colors.textPrimary, letterSpacing: 1.5 },
@@ -461,7 +610,7 @@ const styles = StyleSheet.create({
 
     content: { padding: Spacing.md, gap: Spacing.md },
 
-    // Manifest
+    // ── Manifest ──────────────────────────────────────────────────────────────
     manifestCard: { backgroundColor: MANIFEST_BG, borderRadius: Radius.lg, padding: Spacing.md, gap: Spacing.sm, ...Shadow.sm },
     manifestTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
     manifestIdLabel: { fontSize: 9, fontWeight: '700', color: CODE_COLOR, letterSpacing: 1.2, textTransform: 'uppercase' },
@@ -478,11 +627,38 @@ const styles = StyleSheet.create({
     manifestCountRow: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: Radius.sm, paddingHorizontal: Spacing.sm, paddingVertical: 5, alignSelf: 'flex-start' },
     manifestCountText: { fontSize: 11, fontWeight: '700', color: Colors.primary, letterSpacing: 0.3 },
 
-    // Sections
+    // ── Delivery location card ─────────────────────────────────────────────
+    deliveryCard: {
+        backgroundColor: Colors.surface, borderRadius: Radius.lg,
+        borderWidth: 1, borderColor: Colors.border,
+        overflow: 'hidden', ...Shadow.sm,
+    },
+    deliveryCardHeader: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+        paddingHorizontal: Spacing.md, paddingVertical: 11,
+        borderBottomWidth: 1, borderBottomColor: Colors.borderLight,
+        backgroundColor: Colors.bg,
+    },
+    deliveryCardHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    deliveryCardHeaderTitle: { fontSize: 10, fontWeight: '800', color: Colors.textTertiary, letterSpacing: 1.5, textTransform: 'uppercase' },
+    deliveryChangeBtn: { fontSize: 10, fontWeight: '800', color: CODE_COLOR, letterSpacing: 1.2 },
+    deliveryAddressRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md, padding: Spacing.md, backgroundColor: Colors.primary + '06' },
+    deliveryAddressIcon: { width: 44, height: 44, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    deliveryAddressBody: { flex: 1, gap: 4 },
+    deliveryAddressTopRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    deliveryAddressLabel: { ...Typography.body, color: Colors.textPrimary, fontWeight: '700' },
+    deliveryVerifiedChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#DCFCE7', borderRadius: Radius.full, paddingHorizontal: 8, paddingVertical: 2 },
+    deliveryVerifiedDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#16A34A' },
+    deliveryVerifiedText: { fontSize: 10, fontWeight: '700', color: '#16A34A' },
+    deliveryAddressText: { ...Typography.caption, color: Colors.textSecondary, lineHeight: 17 },
+    deliveryCoordsRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+    deliveryCoordsText: { fontSize: 10, color: Colors.textTertiary, fontFamily: 'monospace', letterSpacing: 0.3 },
+    deliveryMissingRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, padding: Spacing.md, backgroundColor: '#FFFBEB' },
+    deliveryMissingText: { ...Typography.caption, color: Colors.warning, flex: 1, fontWeight: '600' },
+
+    // ── Sections ──────────────────────────────────────────────────────────────
     section: { backgroundColor: Colors.surface, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, gap: Spacing.sm, ...Shadow.sm },
     sectionLabel: { fontSize: 10, fontWeight: '800', color: Colors.textTertiary, letterSpacing: 1.5, textTransform: 'uppercase' },
-
-    // Line items
     lineItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: Spacing.sm },
     lineItemCode: { fontSize: 9, fontWeight: '700', color: CODE_COLOR, letterSpacing: 1.2, marginBottom: 2 },
     lineItemName: { ...Typography.body, color: Colors.textPrimary, fontWeight: '600', maxWidth: 220 },
@@ -491,14 +667,14 @@ const styles = StyleSheet.create({
     itemDivider: { height: 1, backgroundColor: Colors.borderLight },
     itemDividerThick: { height: 1.5, backgroundColor: Colors.border, marginVertical: Spacing.xs },
 
-    // Tax
+    // ── Tax ───────────────────────────────────────────────────────────────────
     taxBox: { backgroundColor: Colors.surfaceAlt, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, gap: Spacing.xs },
     taxLabel: { fontSize: 10, fontWeight: '800', color: Colors.textTertiary, letterSpacing: 1.5, marginBottom: 4 },
     taxRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     taxName: { ...Typography.body, color: Colors.textSecondary },
     taxAmount: { ...Typography.body, color: Colors.textPrimary, fontWeight: '600' },
 
-    // Promo
+    // ── Promo ─────────────────────────────────────────────────────────────────
     promoHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     viewOffersText: { fontSize: 10, fontWeight: '800', color: CODE_COLOR, letterSpacing: 1 },
     promoInputRow: { flexDirection: 'row', gap: Spacing.sm },
@@ -511,27 +687,27 @@ const styles = StyleSheet.create({
     promoAppliedLabel: { ...Typography.caption, color: Colors.textTertiary, marginLeft: 4 },
     promoError: { ...Typography.caption, color: Colors.error, fontWeight: '600' },
 
-    // Grand total
+    // ── Grand total ───────────────────────────────────────────────────────────
     grandTotalBox: { backgroundColor: MANIFEST_BG, borderRadius: Radius.lg, padding: Spacing.md, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#F5C4A8', ...Shadow.sm },
     grandTotalLabel: { fontSize: 16, fontWeight: '900', color: Colors.textPrimary, letterSpacing: 1 },
     grandTotalSub: { fontSize: 9, fontWeight: '700', color: CODE_COLOR, letterSpacing: 1.2, marginTop: 3 },
     grandTotalAmount: { fontSize: 28, fontWeight: '900', color: CODE_COLOR, letterSpacing: 0.5 },
 
-    // Disclaimer
+    // ── Disclaimer / encrypted ────────────────────────────────────────────────
     disclaimerBox: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.xs, backgroundColor: Colors.surfaceAlt, borderRadius: Radius.md, padding: Spacing.sm, borderWidth: 1, borderColor: Colors.borderLight },
     disclaimerText: { ...Typography.caption, color: Colors.textTertiary, flex: 1, lineHeight: 18 },
-
-    // Encrypted
     encryptedBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surfaceAlt, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.borderLight, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm },
     encryptedLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
     encryptedText: { fontSize: 10, fontWeight: '700', color: Colors.textTertiary, letterSpacing: 1.2 },
     paymentIconBox: { width: 36, height: 28, borderRadius: 6, backgroundColor: Colors.border, alignItems: 'center', justifyContent: 'center' },
 
-    // Footer
+    // ── Footer ────────────────────────────────────────────────────────────────
     footer: { backgroundColor: Colors.surface, borderTopWidth: 1, borderTopColor: Colors.borderLight, padding: Spacing.md, gap: Spacing.sm },
     payBtn: { backgroundColor: Colors.primary, borderRadius: Radius.lg, padding: Spacing.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.lg },
     payBtnDisabled: { opacity: 0.6 },
     payBtnTitle: { fontSize: 15, fontWeight: '900', color: '#fff', letterSpacing: 1.5 },
     payBtnSub: { fontSize: 9, color: 'rgba(255,255,255,0.7)', fontWeight: '600', letterSpacing: 1, marginTop: 2 },
+    noLocationWarning: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FFFBEB', borderRadius: Radius.md, padding: Spacing.sm, paddingHorizontal: Spacing.md, borderWidth: 1, borderColor: '#FDE68A' },
+    noLocationWarningText: { ...Typography.caption, color: Colors.warning, fontWeight: '600', flex: 1 },
     termsText: { fontSize: 9, color: Colors.textTertiary, textAlign: 'center', letterSpacing: 0.5, lineHeight: 14 },
 });

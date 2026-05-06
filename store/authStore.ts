@@ -3,6 +3,8 @@
 import { AppUser } from '../types';
 import * as SecureStore from 'expo-secure-store';
 import { create } from 'zustand';
+// import { teardownPushNotifications, setupPushNotifications } from '../utils/notifications';
+import { teardownPushNotifications } from '../utils/services/notificationService';
 
 interface AuthState {
     user: AppUser | null;
@@ -43,6 +45,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     },
 
     logout: async () => {
+        teardownPushNotifications();
         await SecureStore.deleteItemAsync('token');
         await SecureStore.deleteItemAsync('user');
         set({ token: null, user: null });

@@ -6,14 +6,14 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Colors, Typography, Spacing, Radius, Shadow } from '../../constants/theme';
+import { Colors, Typography, Spacing, Radius, Shadow } from '../../../constants/theme';
 
 const LINKS = [
     {
         icon: 'document-text-outline' as const,
         label: 'Terms of Service',
         sub: 'Usage rules, bookings, payments and liability',
-        route: '/(customer)/terms-of-service',
+        route: '/(customer)/account/terms-of-service',
         color: Colors.primary,
         bg: Colors.primaryLight,
     },
@@ -21,7 +21,7 @@ const LINKS = [
         icon: 'shield-checkmark-outline' as const,
         label: 'Privacy Policy',
         sub: 'How we collect, use and protect your data',
-        route: '/(customer)/privacy-policy',
+        route: '/(customer)/account/privacy-policy',
         color: '#7C3AED',
         bg: '#EDE9FE',
     },

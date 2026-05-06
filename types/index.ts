@@ -84,6 +84,25 @@ export type Booking = {
     rejection_note?: string;
     created_at: string;
     updated_at: string;
+
+    // ── add these billing fields (all optional) ───────────────────────────
+    // ── billing (serializer field names → map to invoice) ─────────────────
+    services_subtotal?: number;        // → use as subtotal
+    platform_fee?: number;
+    delivery_charge?: number;
+    gst?: number;        // → use as gst_amount
+    cess?: number;        // → use as cess_amount
+    grand_total?: number;        // → use as total_amount
+    discount?: number;
+    promo_code?: string;
+    payment_status?: string;
+    payment_method?: string;
+    service_items?: { name: string; price: number | null }[];
+
+    // // ✅ Delivery location — all optional so old call sites don't break
+    delivery_address?: string;
+    delivery_latitude?: number | null;
+    delivery_longitude?: number | null;
 };
 
 // export interface DaySchedule {

@@ -9,11 +9,12 @@ import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { useCart } from '../../context/CartContext';   // ✅ added
 import {
-    setupPushNotifications,
+    // setupPushNotifications,
     listenForegroundNotifications,
     listenNotificationTaps,
     checkInitialNotification,
 } from '../../utils/notifications';
+import { setupPushNotifications } from '@/utils/services/notificationService';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -104,7 +105,7 @@ export default function CustomerLayout() {
                 }}
             />
             <Tabs.Screen
-                name="index"
+                name="garages"
                 options={{
                     title: 'Garages',
                     tabBarIcon: ({ focused }) => (
@@ -144,14 +145,17 @@ export default function CustomerLayout() {
             />
 
             {/* ── Hidden screens (no tab bar entry) ─────────── */}
-            <Tabs.Screen name="garage-detail" options={{ href: null }} />
-            <Tabs.Screen name="book-slot" options={{ href: null }} />
-            <Tabs.Screen name="my-vehicles" options={{ href: null }} />
-            <Tabs.Screen name="refer-earn" options={{ href: null }} />
             <Tabs.Screen name="checkout" options={{ href: null }} />
-            <Tabs.Screen name="about" options={{ href: null }} />
-            <Tabs.Screen name="terms-of-service" options={{ href: null }} />
-            <Tabs.Screen name="privacy-policy" options={{ href: null }} />
+            {/* <Tabs.Screen name="location" options={{ href: null }} /> */}
+            {/* <Tabs.Screen name="garage-detail" options={{ href: null }} /> */}
+            {/* <Tabs.Screen name="book-slot" options={{ href: null }} /> */}
+            {/* <Tabs.Screen name="my-vehicles" options={{ href: null }} /> */}
+            {/* <Tabs.Screen name="refer-earn" options={{ href: null }} /> */}
+            {/* <Tabs.Screen name="about" options={{ href: null }} /> */}
+            {/* <Tabs.Screen name="terms-of-service" options={{ href: null }} /> */}
+            {/* <Tabs.Screen name="privacy-policy" options={{ href: null }} /> */}
+            {/* <Tabs.Screen name="booking-invoice" options={{ href: null }} /> */}
+            {/* <Tabs.Screen name="booking-details" options={{ href: null }} /> */}
         </Tabs>
     );
 }

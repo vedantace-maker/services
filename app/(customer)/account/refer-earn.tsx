@@ -5,8 +5,8 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useAuthStore } from '../../store/authStore';
-import { Colors, Typography, Spacing, Radius, Shadow } from '../../constants/theme';
+import { useAuthStore } from '../../../store/authStore';
+import { Colors, Typography, Spacing, Radius, Shadow } from '../../../constants/theme';
 
 export default function ReferEarnScreen() {
     const router = useRouter();
@@ -14,7 +14,7 @@ export default function ReferEarnScreen() {
     const [copied, setCopied] = useState(false);
 
     // Generate referral code from user name + id
-    const referralCode = `${user?.name?.split(' ')[0].toUpperCase() ?? 'USER'}${String(user?.id ?? '').slice(-4)}`;
+    const referralCode = `${user?.name?.split(' ')[0].toUpperCase() ?? 'USER'}${String(user?.uid ?? '').slice(-4)}`;
 
     const handleCopy = () => {
         Clipboard.setString(referralCode);
@@ -42,7 +42,7 @@ export default function ReferEarnScreen() {
         <View style={styles.container}>
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+                <TouchableOpacity style={styles.backBtn} onPress={() => router.push("/(customer)/account")}>
                     <Ionicons name="chevron-back" size={22} color={Colors.textPrimary} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Refer & Earn</Text>

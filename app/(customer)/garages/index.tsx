@@ -6,13 +6,13 @@ import {
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { getAllGarages } from '../../utils/services/garageService';
-import { getDistanceKm } from '../../utils/distance';
-import { Garage } from '../../types';
-import GarageCard from '../../components/GarageCard';
-import Toast from '../../components/Toast';
-import { useToast } from '../../hooks/useToast';
-import { Colors, Typography, Spacing, Radius, Shadow } from '../../constants/theme';
+import { getAllGarages } from '../../../utils/services/garageService';
+import { getDistanceKm } from '../../../utils/distance';
+import { Garage } from '../../../types';
+import GarageCard from '../../../components/GarageCard';
+import Toast from '../../../components/Toast';
+import { useToast } from '../../../hooks/useToast';
+import { Colors, Typography, Spacing, Radius, Shadow } from '../../../constants/theme';
 
 export default function NearbyGaragesScreen() {
     const [garages, setGarages] = useState<Garage[]>([]);
@@ -43,7 +43,9 @@ export default function NearbyGaragesScreen() {
             const withDist = all
                 .map((g) => ({
                     ...g,
-                    distanceKm: getDistanceKm(latitude, longitude, g.latitude, g.longitude),
+                    distanceKm: g.latitude != null && g.longitude != null
+                        ? getDistanceKm(latitude, longitude, g.latitude, g.longitude)
+                        : undefined,
                 }))
                 .sort((a, b) => (a.distanceKm ?? 99) - (b.distanceKm ?? 99));
 
@@ -102,7 +104,7 @@ export default function NearbyGaragesScreen() {
                     <GarageCard
                         garage={item}
                         onPress={() =>
-                            router.push(`/(customer)/garage-detail?id=${item.id}` as any)
+                            router.push(`/(customer)/garages/garage-detail?id=${item.id}` as any)
                         }
                     />
                 )}

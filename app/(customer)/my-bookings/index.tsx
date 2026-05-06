@@ -1,16 +1,23 @@
-import React, { useState, useCallback, useRef } from 'react';
-import {
-    View, Text, StyleSheet, FlatList,
-    TouchableOpacity, ActivityIndicator,
-    Modal, ScrollView, Pressable, Animated
-} from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { getMyBookings, cancelBooking } from '../../utils/services/bookingService';
-import { Booking, BookingStatus } from '../../types';
-import Toast from '../../components/Toast';
-import { useToast } from '../../hooks/useToast';
-import { Colors, Typography, Spacing, Radius, Shadow } from '../../constants/theme';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useRef, useState } from 'react';
+import {
+    ActivityIndicator,
+    Animated,
+    FlatList,
+    Modal,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
+} from 'react-native';
+import Toast from '../../../components/Toast';
+import { Colors, Radius, Shadow, Spacing, Typography } from '../../../constants/theme';
+import { useToast } from '../../../hooks/useToast';
+import { Booking, BookingStatus } from '../../../types';
+import { cancelBooking, getMyBookings } from '../../../utils/services/bookingService';
 
 const STATUS_CONFIG: Record<BookingStatus, {
     label: string; color: string; bg: string; icon: any;
@@ -102,6 +109,20 @@ export default function BookingsScreen() {
         ? tabPool
         : tabPool.filter((b) => b.status === filterKey);
 
+    // ── Add these navigation helpers ───────────────────────────────────────────
+    const goToDetails = (booking: Booking) => {
+        router.push({
+            pathname: '/(customer)/my-bookings/booking-details' as any,
+            params: { booking: JSON.stringify(booking) },
+        });
+    };
+
+    const goToInvoice = (booking: Booking) => {
+        router.push({
+            pathname: '/(customer)/my-bookings/booking-invoice' as any,
+            params: { booking: JSON.stringify(booking) },
+        });
+    };
     // ── Modal helpers ─────────────────────────────────────────────────────────
     const openModal = (item: Booking) => {
         setSelected(item);
@@ -139,11 +160,7 @@ export default function BookingsScreen() {
     const renderBooking = ({ item }: { item: Booking }) => {
         const cfg = STATUS_CONFIG[item.status] ?? STATUS_CONFIG.pending;
         return (
-            <TouchableOpacity
-                style={styles.card}
-                onPress={() => openModal(item)}
-                activeOpacity={0.75}
-            >
+            <View style={styles.card}>
                 {/* Left colored status bar */}
                 <View style={[styles.cardBar, { backgroundColor: cfg.color }]} />
 
@@ -173,10 +190,29 @@ export default function BookingsScreen() {
                             <Text style={styles.metaText}>{formatDisplayTime(item.time)}</Text>
                         </View>
                     </View>
-                </View>
 
-                <Ionicons name="chevron-forward" size={15} color={Colors.textTertiary} style={{ marginRight: Spacing.sm }} />
-            </TouchableOpacity>
+                    {/* ── Action Buttons ─────────────────────────────────────── */}
+                    <View style={styles.cardActions}>
+                        <TouchableOpacity
+                            style={styles.detailsBtn}
+                            onPress={() => goToDetails(item)}
+                            activeOpacity={0.75}
+                        >
+                            <Ionicons name="document-text-outline" size={13} color={Colors.primary} />
+                            <Text style={styles.detailsBtnText}>Details</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.invoiceBtn}
+                            onPress={() => goToInvoice(item)}
+                            activeOpacity={0.75}
+                        >
+                            <Ionicons name="receipt-outline" size={13} color={Colors.textSecondary} />
+                            <Text style={styles.invoiceBtnText}>Invoice</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </View>
         );
     };
 
@@ -495,4 +531,34 @@ const styles = StyleSheet.create({
     emptyDesc: { ...Typography.body, color: Colors.textTertiary, textAlign: 'center' },
     browseBtn: { marginTop: Spacing.sm, backgroundColor: Colors.primary, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.sm, borderRadius: Radius.full },
     browseBtnText: { ...Typography.body, color: '#fff', fontWeight: '700' },
+
+    // Add to StyleSheet.create({...})
+    cardActions: {
+        flexDirection: 'row',
+        gap: Spacing.xs,
+        marginTop: Spacing.xs,
+        paddingTop: Spacing.xs,
+        borderTopWidth: 1,
+        borderTopColor: Colors.borderLight,
+    },
+    detailsBtn: {
+        flex: 1, flexDirection: 'row', alignItems: 'center',
+        justifyContent: 'center', gap: 4,
+        paddingVertical: 7, borderRadius: Radius.md,
+        backgroundColor: Colors.primaryLight,
+        borderWidth: 1, borderColor: Colors.primary + '33',
+    },
+    detailsBtnText: {
+        fontSize: 12, fontWeight: '700', color: Colors.primary,
+    },
+    invoiceBtn: {
+        flex: 1, flexDirection: 'row', alignItems: 'center',
+        justifyContent: 'center', gap: 4,
+        paddingVertical: 7, borderRadius: Radius.md,
+        backgroundColor: Colors.surfaceAlt,
+        borderWidth: 1, borderColor: Colors.border,
+    },
+    invoiceBtnText: {
+        fontSize: 12, fontWeight: '700', color: Colors.textSecondary,
+    },
 });

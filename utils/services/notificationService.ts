@@ -1,68 +1,65 @@
 // utils/services/notificationService.ts
 
+import api from '../api';
+import {
+    setupAndroidChannel,
+    requestNotificationPermissions,
+    getDevicePushToken,
+} from '../notifications';
 import * as Notifications from 'expo-notifications';
-import * as Device from 'expo-device';
-import * as SecureStore from 'expo-secure-store';   // ✅ matches your api.ts
-import Constants from 'expo-constants';
-import { Platform } from 'react-native';
-import api from '../api';                            // ✅ reuse your axios instance
 
-Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-        shouldShowBanner: true,
-        shouldShowList: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-    }),
-});
+// ─────────────────────────────────────────────────────────────────────────────
+// TOKEN REFRESH SUBSCRIPTION — stored so it can be removed on logout
+// ─────────────────────────────────────────────────────────────────────────────
+let _tokenRefreshSub: Notifications.Subscription | null = null;
 
-export async function setupAndroidChannel() {
-    if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync('bookings', {
-            name: 'Booking Updates',
-            importance: Notifications.AndroidImportance.MAX,
-            vibrationPattern: [0, 250, 250, 250],
-            lightColor: '#FF6B35',
-            sound: 'default',
-        });
+// ─────────────────────────────────────────────────────────────────────────────
+// SAVE TOKEN TO DJANGO BACKEND
+// firebase-admin uses this token to send targeted FCM pushes server-side.
+// ─────────────────────────────────────────────────────────────────────────────
+async function saveTokenToBackend(token: string): Promise<void> {
+    try {
+        await api.post('/users/push-token/', { push_token: token });
+        console.log('[Notifications] Token saved to backend.');
+    } catch (e: any) {
+        if (e?.response?.status === 404) {
+            console.warn('[Notifications] /users/push-token/ endpoint not found.');
+        } else {
+            console.warn('[Notifications] Failed to save token:', e);
+        }
     }
 }
 
-export async function registerPushToken(): Promise<string | null> {
-    if (!Device.isDevice) {
-        console.log('Push notifications only work on physical devices.');
-        return null;
-    }
+// ─────────────────────────────────────────────────────────────────────────────
+// FULL SETUP — call once after user logs in
+// permissions → android channel → token → backend save → refresh listener
+// ─────────────────────────────────────────────────────────────────────────────
+export async function setupPushNotifications(): Promise<string | null> {
+    const permitted = await requestNotificationPermissions();
+    if (!permitted) return null;
 
     await setupAndroidChannel();
 
-    const { status: existing } = await Notifications.getPermissionsAsync();
-    let finalStatus = existing;
+    const token = await getDevicePushToken();
+    if (!token) return null;
 
-    if (existing !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
-    }
+    await saveTokenToBackend(token);
 
-    if (finalStatus !== 'granted') {
-        console.log('Notification permission denied.');
-        return null;
-    }
+    // Remove old listener before attaching a new one (e.g. after re-login)
+    _tokenRefreshSub?.remove();
+    _tokenRefreshSub = Notifications.addPushTokenListener(async (newToken) => {
+        console.log('[Notifications] Token refreshed:', newToken.data);
+        await saveTokenToBackend(newToken.data);
+    });
 
-    const projectId =
-        Constants?.expoConfig?.extra?.eas?.projectId ??
-        Constants?.easConfig?.projectId;
+    return token;
+}
 
-    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
-    const pushToken = tokenData.data;
-
-    // ✅ Use your existing axios instance — interceptor auto-attaches Bearer token
-    try {
-        await api.post('/users/push-token/', { push_token: pushToken });
-        console.log('Push token registered with backend.');
-    } catch (e) {
-        console.warn('Failed to send push token to backend:', e);
-    }
-
-    return pushToken;
+// ─────────────────────────────────────────────────────────────────────────────
+// TEARDOWN — call on logout to stop the token refresh listener
+// ─────────────────────────────────────────────────────────────────────────────
+export function teardownPushNotifications(): void {
+    _tokenRefreshSub?.remove();
+    _tokenRefreshSub = null;
+    console.log('[Notifications] Teardown complete.');
 }

@@ -9,10 +9,10 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import {
     getMyVehicles, addVehicle, updateVehicle,
     deleteVehicle, Vehicle, VehicleType,
-} from '../../utils/services/vehicleService';
-import Toast from '../../components/Toast';
-import { useToast } from '../../hooks/useToast';
-import { Colors, Typography, Spacing, Radius, Shadow } from '../../constants/theme';
+} from '../../../utils/services/vehicleService';
+import Toast from '../../../components/Toast';
+import { useToast } from '../../../hooks/useToast';
+import { Colors, Typography, Spacing, Radius, Shadow } from '../../../constants/theme';
 
 const VEHICLE_BRANDS = {
     bike: ['Honda', 'Hero', 'Bajaj', 'TVS', 'Royal Enfield', 'Yamaha', 'KTM', 'Suzuki', 'Other'],

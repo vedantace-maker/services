@@ -28,6 +28,11 @@ export async function createBooking(payload: {
     grand_total: number;
     payment_status: string;
     payment_method: string;
+
+    // ✅ Delivery — use undefined, not null
+    delivery_address?: string;
+    delivery_latitude?: number;
+    delivery_longitude?: number;
 }): Promise<Booking> {
     const { data } = await api.post('/bookings/', payload);   // ✅ full payload forwarded
     return data;

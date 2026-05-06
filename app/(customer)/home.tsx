@@ -11,6 +11,7 @@ import { useAuthStore } from '../../store/authStore';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../constants/theme';
 import { getMyVehicles } from '../../utils/services/vehicleService';
 
+
 const { width } = Dimensions.get('window');
 
 const OFFER_SLIDES = [
@@ -168,7 +169,7 @@ export default function HomeScreen() {
         Animated.timing(slideAnim, { toValue: 0, duration: 220, useNativeDriver: true })
             .start(() => {
                 setShowVehiclePrompt(false);
-                if (goToVehicles) router.push('/(customer)/my-vehicles' as any);
+                if (goToVehicles) router.push('/(customer)/account/my-vehicles' as any);
             });
     };
 
@@ -260,7 +261,7 @@ export default function HomeScreen() {
                 <View style={styles.section}>
                     <View style={styles.sectionRow}>
                         <Text style={styles.sectionTitle}>Offers & Deals</Text>
-                        <TouchableOpacity><Text style={styles.sectionLink}>View all</Text></TouchableOpacity>
+                        <TouchableOpacity onPress={() => router.push('/(customer)/account/location')}><Text style={styles.sectionLink}>View all</Text></TouchableOpacity>
                     </View>
                     <OfferSlider />
                 </View>
